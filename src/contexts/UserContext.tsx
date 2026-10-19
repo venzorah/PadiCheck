@@ -20,6 +20,7 @@ interface Preferences {
 interface UserContextValue extends OfflineQueueApi {
   session: ConsumerSession | null;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: (credential: string) => Promise<void>;
   signOut: () => Promise<void>;
   pendingSignup: (Registration & Challenge & { requestedAt: number }) | null;
   startSignup: (registration: Registration) => Promise<void>;
@@ -64,18 +65,21 @@ export function UserProvider({ children }: {children: ReactNode;}) {
   useEffect(() => {
     if (location.pathname !== '/signup' && location.pathname !== '/verify-code') setPendingSignup(null);
   }, [location.pathname]);
-  const acceptSession = useCallback(async (result: AuthSession) => {
+  const acceptSession = useCallback(async (result: AuthSession, provider: ConsumerSession['provider'] = 'email') => {
     const expiresAt = Date.now() + result.expires_in * 1000;
     const { user } = await authApi.me(result.access_token);
     if (Date.now() >= expiresAt) throw new Error('Session expired');
     window.clearTimeout(expiryTimer.current);
     setAccessToken(result.access_token);
-    setSession({ id: user.users_id, name: user.display_name, email: user.email, emailVerified: user.email_verified, roles: user.roles ?? [], permissions: user.permissions ?? [], provider: 'email' });
+    setSession({ id: user.users_id, name: user.display_name, email: user.email, emailVerified: user.email_verified, roles: user.roles ?? [], permissions: user.permissions ?? [], provider });
     setPendingSignup(null);
     expiryTimer.current = window.setTimeout(clearSession, expiresAt - Date.now());
   }, [clearSession]);
   const signIn = useCallback(async (email: string, password: string) => {
     await acceptSession(await authApi.login(email, password));
+  }, [acceptSession]);
+  const signInWithGoogle = useCallback(async (credential: string) => {
+    await acceptSession(await authApi.googleLogin(credential), 'google');
   }, [acceptSession]);
   const startSignup = useCallback(async (registration: Registration) => {
     const challenge = await authApi.register(registration);
@@ -94,7 +98,7 @@ export function UserProvider({ children }: {children: ReactNode;}) {
   const signOut = useCallback(async () => {
     try { await authApi.logout(); }
     catch (error) { toast.error(`Signed out on this device. Server revocation could not be confirmed. ${apiErrorMessage(error)}`); }
-    finally { clearSession(); }
+    finally { clearSession(); window.google?.accounts.id.disableAutoSelect(); }
   }, [clearSession]);
   const [credits, setCredits] = usePersistentState('pc-credits', 18);
   const [transactions, setTransactions] = usePersistentState<CreditTransaction[]>('pc-transactions', initialTransactions);
@@ -154,6 +158,7 @@ export function UserProvider({ children }: {children: ReactNode;}) {
       ...queueApi,
       session,
       signIn,
+      signInWithGoogle,
       signOut,
       pendingSignup,
       startSignup,
@@ -174,7 +179,7 @@ export function UserProvider({ children }: {children: ReactNode;}) {
       preferences,
       setPreference: (key, v) => setPreferences((p) => ({ ...p, [key]: v }))
     }),
-    [queueApi, session, signIn, signOut, pendingSignup, startSignup, verifySignup, resendSignup, credits, transactions, spendCredits, addCredits, savedIds, setSavedIds, dataSaver, setDataSaver, notificationPrefs, setNotificationPrefs, preferences, setPreferences]
+    [queueApi, session, signIn, signInWithGoogle, signOut, pendingSignup, startSignup, verifySignup, resendSignup, credits, transactions, spendCredits, addCredits, savedIds, setSavedIds, dataSaver, setDataSaver, notificationPrefs, setNotificationPrefs, preferences, setPreferences]
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

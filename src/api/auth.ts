@@ -12,4 +12,7 @@ export const authApi = {
   login: (email: string, password: string) => api<AuthSession>('/v1/auth/login', { method: 'POST', json: { email, password } }),
   me: (token: string) => api<{ user: AuthUser }>('/v1/auth/me', { auth: true, token }),
   logout: () => api<void>('/v1/auth/logout', { method: 'POST', auth: true }),
+  googleChallenge: (action: 'login' | 'link', signal?: AbortSignal) => api<{ nonce: string; expires_in: number }>('/v1/auth/google/challenge', { method: 'POST', json: { action }, auth: action === 'link', signal }),
+  googleLogin: (id_token: string) => api<AuthSession>('/v1/auth/google', { method: 'POST', json: { id_token } }),
+  linkGoogle: (id_token: string) => api<{ linked: boolean }>('/v1/auth/google/link', { method: 'POST', auth: true, json: { id_token } }),
 };

@@ -8,6 +8,8 @@ const encode = (source) => `data:text/javascript;base64,${Buffer.from(ts.transpi
 const clientUrl = encode((await readFile(new URL('../src/api/client.ts', import.meta.url), 'utf8')).replace('import.meta.env.VITE_API_BASE_URL', "'https://api.example.test/v1/'"));
 const client = await import(clientUrl);
 const { authApi } = await import(encode((await readFile(new URL('../src/api/auth.ts', import.meta.url), 'utf8')).replace("'./client'", JSON.stringify(clientUrl))));
+const googleModuleUrl = encode((await readFile(new URL('../src/utils/googleIdentity.ts', import.meta.url), 'utf8')).replace("'../api/client'", JSON.stringify(clientUrl)));
+const { googleErrorMessage, loadGoogleIdentity } = await import(googleModuleUrl);
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; client.setAccessToken(null); });
 
@@ -90,4 +92,56 @@ test('multipart leaves the boundary to the browser; cancellation reaches fetch',
 test('unavailable and non-JSON error responses remain failures', async () => {
   globalThis.fetch = async () => new Response('Proxy unavailable', { status: 503 });
   await assert.rejects(authApi.login('ada@example.com', 'example-password'), (error) => error.status === 503 && client.apiErrorMessage(error).includes('unavailable'));
+});
+
+test('Google login uses a public challenge and ID-token exchange; linking uses the current session', async () => {
+  const requests = [];
+  client.setAccessToken('padicheck-access-token');
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return Response.json(url.endsWith('/challenge') ? { nonce: 'server-nonce', expires_in: 300 } : url.endsWith('/link') ? { linked: true } : { access_token: 'new-padicheck-token' });
+  };
+  const controller = new AbortController();
+  assert.equal((await authApi.googleChallenge('login', controller.signal)).nonce, 'server-nonce');
+  await authApi.googleLogin('google-id-token');
+  await authApi.googleChallenge('link');
+  assert.equal((await authApi.linkGoogle('link-google-id-token')).linked, true);
+  assert.deepEqual(requests.map(({ url }) => url.replace('https://api.example.test', '')), ['/v1/auth/google/challenge', '/v1/auth/google', '/v1/auth/google/challenge', '/v1/auth/google/link']);
+  assert.deepEqual(requests.map(({ options }) => options.headers.get('Authorization')), [null, null, 'Bearer padicheck-access-token', 'Bearer padicheck-access-token']);
+  assert.deepEqual(requests.map(({ options }) => JSON.parse(options.body)), [{ action: 'login' }, { id_token: 'google-id-token' }, { action: 'link' }, { id_token: 'link-google-id-token' }]);
+  assert.equal(requests[0].options.signal, controller.signal);
+});
+
+test('Google conflicts direct the user to explicit linking or email verification', () => {
+  assert.match(googleErrorMessage(new client.ApiError(409, 'account_link_required', 'Conflict')), /Sign in with your password.*link Google/);
+  assert.match(googleErrorMessage(new client.ApiError(409, 'email_verification_required', 'Conflict')), /verify your email/);
+  assert.match(googleErrorMessage(new client.ApiError(503, 'google_auth_unavailable', 'Unavailable')), /currently unavailable/);
+});
+
+test('Google SDK load failures permit retry and concurrent callers share one script', async () => {
+  const originalWindow = globalThis.window;
+  const originalDocument = globalThis.document;
+  const scripts = [];
+  globalThis.window = { setTimeout, clearTimeout };
+  globalThis.document = {
+    createElement: () => ({ remove() { this.removed = true; } }),
+    head: { appendChild(script) { scripts.push(script); } },
+  };
+  try {
+    const failed = loadGoogleIdentity();
+    assert.equal(loadGoogleIdentity(), failed);
+    scripts[0].onerror();
+    await assert.rejects(failed, /Google could not load/);
+    assert.equal(scripts[0].removed, true);
+    const retry = loadGoogleIdentity();
+    assert.equal(scripts.length, 2);
+    assert.equal(scripts[1].src, 'https://accounts.google.com/gsi/client');
+    const sdk = { initialize() {}, renderButton() {} };
+    window.google = { accounts: { id: sdk } };
+    scripts[1].onload();
+    assert.equal(await retry, sdk);
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    if (originalDocument === undefined) delete globalThis.document; else globalThis.document = originalDocument;
+  }
 });
