@@ -10,6 +10,12 @@ const client = await import(clientUrl);
 const { authApi } = await import(encode((await readFile(new URL('../src/api/auth.ts', import.meta.url), 'utf8')).replace("'./client'", JSON.stringify(clientUrl))));
 const googleModuleUrl = encode((await readFile(new URL('../src/utils/googleIdentity.ts', import.meta.url), 'utf8')).replace("'../api/client'", JSON.stringify(clientUrl)));
 const { googleErrorMessage, loadGoogleIdentity } = await import(googleModuleUrl);
+const { investigationsApi } = await import(encode((await readFile(new URL('../src/api/investigations.ts', import.meta.url), 'utf8')).replace("'./client'", JSON.stringify(clientUrl))));
+const { mediaApi } = await import(encode((await readFile(new URL('../src/api/media.ts', import.meta.url), 'utf8')).replace("'./client'", JSON.stringify(clientUrl))));
+const investigationUtilsUrl = encode(await readFile(new URL('../src/utils/investigations.ts', import.meta.url), 'utf8'));
+const { buildInvestigation, safeHttpUrl } = await import(investigationUtilsUrl);
+const pollingUrl = encode((await readFile(new URL('../src/utils/investigationPolling.ts', import.meta.url), 'utf8')).replace("'../api/client'", JSON.stringify(clientUrl)).replace("'./investigations'", JSON.stringify(investigationUtilsUrl)));
+const { startInvestigationPolling } = await import(pollingUrl);
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; client.setAccessToken(null); });
 
@@ -144,4 +150,130 @@ test('Google SDK load failures permit retry and concurrent callers share one scr
     if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
     if (originalDocument === undefined) delete globalThis.document; else globalThis.document = originalDocument;
   }
+});
+
+test('research contexts map to supported investigations without promising specialized checks', () => {
+  const base = { type: 'shopping', mode: 'text', text: 'Research this seller and their offer', url: '', mediaIds: [] };
+  assert.equal(buildInvestigation(base).investigation_type, 'general_research');
+  assert.equal(buildInvestigation({ ...base, type: 'job' }).investigation_type, 'general_research');
+  assert.equal(buildInvestigation({ ...base, type: 'business' }).investigation_type, 'company_research');
+  assert.equal(buildInvestigation({ ...base, mode: 'link', url: 'example.com' }).input_data.urls[0], 'https://example.com/');
+  assert.equal(buildInvestigation({ ...base, mode: 'link', url: 'example.com' }).investigation_type, 'web_analysis');
+  assert.throws(() => buildInvestigation({ ...base, type: 'contract' }), /uploaded PDF/);
+  assert.equal(buildInvestigation({ ...base, type: 'contract', mode: 'upload', mediaIds: ['document-id'] }).investigation_type, 'contract_review');
+  const phone = buildInvestigation({ ...base, type: 'phone', text: '+234 801 234 5678' });
+  assert.equal(phone.investigation_type, 'phone_lookup');
+  assert.deepEqual(phone.input_data.targets[0].identifiers, [{ identifier_type: 'phone', value: '+2348012345678' }]);
+  assert.throws(() => buildInvestigation({ ...base, type: 'phone', text: '08012345678' }), /international/);
+  assert.throws(() => buildInvestigation({ ...base, text: 'x'.repeat(10001) }), /10,000/);
+  assert.throws(() => buildInvestigation({ ...base, mode: 'link', url: 'https://user:password@example.com' }), /credentials/);
+  assert.equal(safeHttpUrl('javascript:alert(1)'), null);
+  assert.equal(safeHttpUrl('data:text/html,unsafe'), null);
+});
+
+test('history uses own scope and an opaque cursor; findings and sources paginate independently', async () => {
+  client.setAccessToken('session');
+  const urls = [];
+  globalThis.fetch = async (url, options) => {
+    assert.equal(options.headers.get('Authorization'), 'Bearer session');
+    urls.push(new URL(url));
+    return Response.json(url.includes('/sources') ? { sources: [] } : url.includes('/findings') ? { findings: [], limitations: [] } : { investigations: [], next_cursor: null });
+  };
+  const cursor = 'opaque+/=cursor';
+  assert.equal((await investigationsApi.list(cursor)).next_cursor, null);
+  await investigationsApi.sources('investigation', 20);
+  await investigationsApi.findings('investigation', 40);
+  assert.equal(urls[0].searchParams.get('scope'), 'own');
+  assert.equal(urls[0].searchParams.get('cursor'), cursor);
+  assert.equal(urls[0].searchParams.has('offset'), false);
+  assert.equal(urls[1].searchParams.get('offset'), '20');
+  assert.equal(urls[2].searchParams.get('offset'), '40');
+});
+
+test('deferred creation is accepted once and cancel/retry use existing-investigation actions', async () => {
+  client.setAccessToken('session');
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return Response.json({ investigation: { investigation_id: 'saved-id', status: 'queued' }, dispatch: 'deferred' }, { status: url.endsWith('/cancel') ? 200 : 202 });
+  };
+  const payload = buildInvestigation({ type: 'any', mode: 'text', text: 'Research this opportunity', url: '', mediaIds: [] });
+  const result = await investigationsApi.create(payload);
+  assert.equal(result.dispatch, 'deferred');
+  assert.equal(calls.length, 1);
+  assert.deepEqual(JSON.parse(calls[0].options.body), payload);
+  await investigationsApi.cancel('saved-id');
+  await investigationsApi.retry('saved-id');
+  assert.ok(calls[1].url.endsWith('/saved-id/cancel'));
+  assert.ok(calls[2].url.endsWith('/saved-id/retry'));
+  assert.equal(calls[2].options.body, undefined);
+});
+
+test('media uploads use one multipart file and private delivery is requested fresh', async () => {
+  client.setAccessToken('session');
+  const file = new File(['%PDF-1.7'], 'contract.pdf', { type: 'application/pdf' });
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return url.endsWith('/delivery') ? Response.json({ url: 'https://media.example.test/signed', expires_at: 2000000000 }) : options.method === 'DELETE' ? new Response(null, { status: 204 }) : Response.json({ media: { media_id: 'media-id', upload_status: 'ready', media_type: 'document' } }, { status: 201 });
+  };
+  await mediaApi.upload(file);
+  assert.deepEqual([...calls[0].options.body.keys()], ['file']);
+  assert.equal(calls[0].options.headers.has('Content-Type'), false);
+  await mediaApi.delivery('media-id');
+  await mediaApi.delivery('media-id');
+  await mediaApi.remove('media-id');
+  assert.equal(calls.length, 4);
+  assert.equal(calls[1].options.method, 'POST');
+  assert.equal(calls[3].options.method, 'DELETE');
+});
+
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+const detailWith = (status, ai_analysis = true) => ({ investigation: { status }, capabilities: { independent_search: ai_analysis, ai_analysis }, limitations: [] });
+test('polling follows active states, slows down without AI, and stops at completion', async () => {
+  const scheduled = [];
+  const states = [];
+  const details = [detailWith('queued', false), detailWith('analyzing'), detailWith('completed')];
+  const stop = startInvestigationPolling({
+    read: async () => details.shift(), onData: (data) => states.push(data.investigation.status), onError: assert.fail,
+    schedule: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length; }, unschedule: () => {},
+  });
+  await flush();
+  assert.equal(scheduled[0].delay, 15000);
+  scheduled.shift().callback(); await flush();
+  assert.equal(scheduled[0].delay, 4000);
+  scheduled.shift().callback(); await flush();
+  assert.deepEqual(states, ['queued', 'analyzing', 'completed']);
+  assert.equal(scheduled.length, 0);
+  stop();
+});
+
+test('polling respects Retry-After and stops on permission or missing-resource errors', async () => {
+  for (const status of [403, 404, 429]) {
+    const scheduled = [];
+    const stop = startInvestigationPolling({
+      read: async () => { throw new client.ApiError(status, 'failure', 'Failed', undefined, '120'); },
+      onData: assert.fail, onError: () => {},
+      schedule: (callback, delay) => { scheduled.push({ callback, delay }); return 1; }, unschedule: () => {},
+    });
+    await flush();
+    if (status === 429) assert.equal(scheduled[0].delay, 120000); else assert.equal(scheduled.length, 0);
+    stop();
+  }
+});
+
+test('stopping polling aborts the in-flight read and ignores its late result', async () => {
+  let resolve;
+  let signal;
+  let notifications = 0;
+  const stop = startInvestigationPolling({
+    read: (requestSignal) => { signal = requestSignal; return new Promise((done) => { resolve = done; }); },
+    onData: () => notifications++, onError: () => notifications++,
+    schedule: () => assert.fail('Stopped polling scheduled another request'),
+  });
+  stop();
+  assert.equal(signal.aborted, true);
+  resolve(detailWith('queued'));
+  await flush();
+  assert.equal(notifications, 0);
 });

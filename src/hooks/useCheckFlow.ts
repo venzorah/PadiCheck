@@ -34,7 +34,7 @@ export function useCheckFlow() {
   const uploaded = useRef(new Map<File, MediaRecord>());
   useEffect(() => () => controller.current?.abort(), []);
   const allowed = hasPermission('investigations.create');
-  const ready = online && allowed && !busy && !uncertain && (mode === 'text' ? text.trim().length > 0 && text.length <= 10000 : mode === 'link' ? url.trim().length > 0 : mode === 'upload' ? uploads.length > 0 && uploads.length <= 10 && uploads.every((u) => u.status !== 'error' && (u.file.type === 'application/pdf' || /\.pdf$/i.test(u.file.name))) : false);
+  const ready = online && allowed && !busy && !uncertain && text.length <= 10000 && (mode === 'text' ? text.trim().length > 0 : mode === 'link' ? url.trim().length > 0 : mode === 'upload' ? uploads.length > 0 && uploads.length <= 10 && uploads.every((u) => u.status !== 'error' && u.file.size > 0 && u.file.size <= 10 * 1024 * 1024 && (u.file.type === 'application/pdf' || /\.pdf$/i.test(u.file.name))) : false);
   const summary = mode === 'link' ? url : mode === 'text' ? text.slice(0, 100) : `${uploads.length} PDF document(s)`;
   const confirm = async () => {
     if (inFlight.current || !ready) return;

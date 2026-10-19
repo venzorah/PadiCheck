@@ -25,7 +25,33 @@ The first integration slice connects password registration, email signup OTP ver
 
 Google Identity Services login and explicit authenticated account linking are wired into Sign in and Security & privacy. Each attempt requests a fresh server nonce, passes it into Google's official button, and exchanges only the callback credential with the backend. Login loads `/auth/me` before opening protected pages. Linking requires a verified local email and leaves the current session intact. Failed/expired attempts require a fresh challenge. Google tokens and nonces are never persisted or logged.
 
-Uploads, investigations, billing, directory and staff API integration remain future slices. Other screens still use the existing prototype data and behavior; their balances, results, billing actions and staff access do not represent backend state or authorization. The admin login remains a separate prototype and is not connected by this change.
+The main check flow now creates real investigations, uploads private PDF documents and opens the backend investigation ID. Home, Check Now and History show real investigation records rather than preset scores/results. Results show actual statuses, summaries, findings, evidence and capability limitations. Owner cancellation and failed-investigation retry use the backend actions. The previous offline queue no longer simulates processing or charges local credits.
+
+Billing, directory and staff API integration remain future slices. Their existing prototype screens do not represent backend balances, charges or staff authorization. The admin login remains a separate prototype. Existing public trust-report and directory views still use prototype data; new investigation results do not use those views.
+
+## Investigation integration
+
+| Frontend input | Backend investigation |
+| --- | --- |
+| Link / website / listing URL | `web_analysis` |
+| Business | `company_research` |
+| International phone number | `phone_lookup` with a phone target identifier |
+| Contract with uploaded PDFs | `contract_review` |
+| Shopping, property, job-offer, freelance, person, social or general description | `general_research` |
+
+Checking a job offer is a general research context, not a job-search or candidate-matching request. These mappings do not promise authoritative identity, registration, property-title or scam verification. The UI does not manufacture scores or safe/risky verdicts.
+
+- Investigation analysis accepts PDF documents, up to ten per request and 10 MiB per file under the documented default upload limit. The backend validates the file contents. DOCX/TXT, camera/image analysis and audio/video analysis are unavailable in this flow. The wider media API's format support does not imply analysis support.
+- Files upload only after confirmation. Upload IDs are reused if a later submission fails while the page remains open. No POST is automatically replayed. A network/5xx failure during creation may leave a saved investigation, so the UI asks the user to check History before another creation attempt.
+- A 202 response is accepted even when dispatch is deferred. Queued, collecting, analyzing, completed, failed and cancelled are actual server statuses; no percentage progress is invented.
+- Visible active details poll every four seconds, or every fifteen seconds when AI is unavailable. Polling backs off after errors, respects Retry-After, aborts on unmount/hidden tabs and stops at terminal states. Returning to a visible page refreshes the detail.
+- History uses `scope=own`, opaque cursors and no invented total. Search and in-progress filtering apply to loaded pages. Findings and sources have separate offset pagination.
+- Findings retain their actual verification status and per-finding confidence; AI findings and user allegations are not treated as verified decisions. External links accept only HTTP/HTTPS URLs without embedded credentials.
+- Private evidence delivery requests a fresh temporary URL. Signed URLs are kept only in component memory and expire according to the server's Unix timestamp.
+- Only the owner with `investigations.create` sees cancel/retry controls. Cancellation does not promise a refund; retries reuse failed investigations. Permission checks also recognize the backend's superadmin wildcard, while server authorization remains authoritative.
+- This flow has no client credit deductions. The server enforces one unit per new investigation when billing is enabled. A 402 is shown without pretending the prototype purchase screens are connected. Offline submission, saved investigation caching and result sharing are not connected yet.
+
+Live readiness currently reports media storage and background jobs unconfigured, research disabled, and email signup/Google unconfigured. Unauthorized investigation/media requests return 401 as expected. Real upload/creation, worker completion and private evidence delivery still require configured services and an authenticated test account.
 
 ## Google and email configuration
 

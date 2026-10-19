@@ -25,11 +25,13 @@ export function buildInvestigation(input: { type: ResearchContext; mode: 'link' 
   const investigation_type: InvestigationType = input.type === 'contract' ? 'contract_review' : input.type === 'phone' ? 'phone_lookup' : input.type === 'business' ? 'company_research' : input.mode === 'link' ? 'web_analysis' : 'general_research';
   const urls: string[] = [];
   if (input.mode === 'link') {
+    if (/^[a-z][a-z\d+.-]*:/i.test(input.url.trim()) && !/^https?:\/\//i.test(input.url.trim())) throw new Error('Use an HTTP or HTTPS link.');
     const url = safeHttpUrl(/^https?:\/\//i.test(input.url.trim()) ? input.url.trim() : `https://${input.url.trim()}`);
     if (!url || url.length > 2048) throw new Error('Enter a valid HTTP or HTTPS link without embedded credentials (up to 2,048 characters).');
     urls.push(url);
   }
   if (input.type === 'contract' && !input.mediaIds.length) throw new Error('Contract review requires at least one uploaded PDF document.');
+  if (input.mode === 'upload' && !input.mediaIds.length) throw new Error('Choose at least one PDF document.');
   if (input.mediaIds.length > 10) throw new Error('Choose at most ten documents.');
   const context = input.type === 'any' ? 'the submitted information' : `the submitted ${input.type} opportunity`;
   const user_prompt = input.mode === 'text' ? input.text.trim() : input.text.trim() || `Research ${context} using the submitted references. Explain available evidence, uncertainty and limitations.`;
