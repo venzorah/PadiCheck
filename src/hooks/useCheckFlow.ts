@@ -1,131 +1,79 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
-import { usePersistentState } from './usePersistentState';
 import { usePwa } from '../contexts/PwaContext';
 import { useUser } from '../contexts/UserContext';
-import { demoResultByType } from '../data/results';
-import { domainOf, getCheckType, looksLikeUrl, makeId } from '../utils/checks';
+import { getCheckType, makeId } from '../utils/checks';
 import { takeSharedFiles } from '../utils/shareInbox';
+import { buildInvestigation, type ResearchContext } from '../utils/investigations';
+import { investigationsApi } from '../api/investigations';
+import { mediaApi } from '../api/media';
+import { ApiError, apiErrorMessage } from '../api/client';
 import type { InputMode, UploadItem } from '../types/check';
-
-const MODES: InputMode[] = ['link', 'text', 'camera', 'upload'];
+import type { MediaRecord } from '../types/investigation';
 
 export function useCheckFlow() {
-  const { type } = useParams<{type: string;}>();
+  const { type } = useParams<{ type: string }>();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { online } = usePwa();
-  const { credits, spendCredits, enqueue } = useUser();
+  const { hasPermission } = useUser();
   const option = getCheckType(type);
-
-  const requested = params.get('mode') as InputMode | null;
-  const initialMode: InputMode =
-  requested && MODES.includes(requested) ?
-  requested :
-  params.get('url') || option.id === 'link' ?
-  'link' :
-  option.id === 'contract' ?
-  'upload' :
-  'text';
-
-  const [mode, setMode] = useState<InputMode>(initialMode);
-  const [url, setUrl] = usePersistentState(`pc-draft-${option.id}-url`, '');
-  const [text, setText] = usePersistentState(`pc-draft-${option.id}-text`, '');
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [uploads, setUploads] = useState<UploadItem[]>(() =>
-  takeSharedFiles().map((file) => ({ id: makeId('f'), file, progress: 100, status: 'ready' as const }))
-  );
+  const context: ResearchContext = type && ['business', 'phone', 'website', 'person', 'social', 'listing'].includes(type) ? type as ResearchContext : option.id;
+  const initial = params.get('mode');
+  const [mode, setMode] = useState<InputMode>(context === 'phone' ? 'text' : option.id === 'contract' ? 'upload' : context === 'website' ? 'link' : initial === 'camera' || initial === 'upload' || initial === 'text' || initial === 'link' ? initial : option.id === 'link' || params.has('url') ? 'link' : 'text');
+  const [url, setUrl] = useState(params.get('url') ?? '');
+  const [text, setText] = useState(params.get('text') ?? '');
+  const [uploads, setUploads] = useState<UploadItem[]>(() => takeSharedFiles().map((file) => ({ id: makeId('f'), file, progress: 0, status: 'ready' })));
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-
-  useEffect(() => {
-    const incomingUrl = params.get('url');
-    const incomingText = params.get('text');
-    if (incomingUrl) setUrl(incomingUrl);
-    if (incomingText) setText(incomingText);
-    // Apply deep-link / share payload once on arrival.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const readyUploads = uploads.filter((u) => u.status === 'ready');
-  const cost = option.credits + (mode === 'upload' ? Math.max(0, readyUploads.length - 1) : 0);
-
-  const ready =
-  mode === 'link' ?
-  looksLikeUrl(url) :
-  mode === 'text' ?
-  text.trim().length >= 12 :
-  mode === 'camera' ?
-  photo !== null :
-  readyUploads.length > 0 && !uploads.some((u) => u.status === 'reading');
-
-  const summary =
-  mode === 'link' ?
-  domainOf(url) :
-  mode === 'text' ?
-  `“${text.trim().slice(0, 70)}${text.trim().length > 70 ? '…' : ''}”` :
-  mode === 'camera' ?
-  'Photo from your camera' :
-  readyUploads.length === 1 ?
-  readyUploads[0].file.name :
-  `${readyUploads.length} files`;
-
-  const sizeBytes =
-  mode === 'upload' ?
-  readyUploads.reduce((sum, u) => sum + u.file.size, 0) :
-  mode === 'camera' && photo ?
-  Math.round(photo.length * 0.75) :
-  undefined;
-
-  const clearDraft = () => {
-    setUrl('');
-    setText('');
-  };
-
-  const confirm = () => {
+  const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState('');
+  const [error, setError] = useState('');
+  const [uncertain, setUncertain] = useState(false);
+  const inFlight = useRef(false);
+  const controller = useRef<AbortController>();
+  const uploaded = useRef(new Map<File, MediaRecord>());
+  useEffect(() => () => controller.current?.abort(), []);
+  const allowed = hasPermission('investigations.create');
+  const ready = online && allowed && !busy && !uncertain && (mode === 'text' ? text.trim().length > 0 && text.length <= 10000 : mode === 'link' ? url.trim().length > 0 : mode === 'upload' ? uploads.length > 0 && uploads.length <= 10 && uploads.every((u) => u.status !== 'error' && (u.file.type === 'application/pdf' || /\.pdf$/i.test(u.file.name))) : false);
+  const summary = mode === 'link' ? url : mode === 'text' ? text.slice(0, 100) : `${uploads.length} PDF document(s)`;
+  const confirm = async () => {
+    if (inFlight.current || !ready) return;
+    inFlight.current = true;
     setConfirmOpen(false);
-    if (!online) {
-      enqueue({ type: option.id, mode, label: `${option.longLabel} · ${summary}`, sizeBytes, credits: cost });
-      clearDraft();
-      toast('Saved to your queue', { description: 'We’ll run this check as soon as you’re back online.' });
-      navigate('/history?tab=pending', { replace: true });
-      return;
-    }
-    if (!spendCredits(cost, option.longLabel)) {
-      navigate('/credits');
-      return;
-    }
-    setAnalyzing(true);
+    setBusy(true);
+    setError('');
+    const abort = new AbortController();
+    controller.current = abort;
+    let creating = false;
+    try {
+      const mediaIds: string[] = [];
+      if (mode === 'upload') {
+        for (const [index, item] of uploads.entries()) {
+          setStage(`Uploading document ${index + 1} of ${uploads.length}...`);
+          let media = uploaded.current.get(item.file);
+          if (!media) {
+            const response = await mediaApi.upload(item.file, abort.signal);
+            media = response.media;
+            uploaded.current.set(item.file, media);
+          }
+          if (media.upload_status !== 'ready' || media.media_type !== 'document') throw new Error('The uploaded document is not ready for analysis.');
+          mediaIds.push(media.media_id);
+        }
+      }
+      const input = buildInvestigation({ type: context, mode: mode as 'link' | 'text' | 'upload', text, url, mediaIds });
+      setStage('Submitting investigation...');
+      creating = true;
+      const result = await investigationsApi.create(input, abort.signal);
+      navigate(`/result/${result.investigation.investigation_id}`, { replace: true, state: { dispatch: result.dispatch } });
+    } catch (failure) {
+      if (abort.signal.aborted) return;
+      if (creating && (!(failure instanceof ApiError) || failure.status >= 500 || failure.code === 'invalid_response')) {
+        setUncertain(true);
+        setError('The submission could not be confirmed. Check History before starting another check; the server may have saved it.');
+      } else if (failure instanceof ApiError && failure.status === 402) {
+        setError('You have no investigation units available. Billing integration is not available on this screen yet.');
+      } else setError(failure instanceof ApiError ? apiErrorMessage(failure) : failure instanceof Error ? failure.message : 'Could not submit this check.');
+    } finally { inFlight.current = false; if (!abort.signal.aborted) setBusy(false); }
   };
-
-  const finish = useCallback(() => {
-    clearDraft();
-    navigate(`/result/${demoResultByType[option.id]}?new=1`, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [option.id, navigate]);
-
-  return {
-    option,
-    mode,
-    setMode,
-    url,
-    setUrl,
-    text,
-    setText,
-    photo,
-    setPhoto,
-    uploads,
-    setUploads,
-    cost,
-    credits,
-    online,
-    ready,
-    summary,
-    confirmOpen,
-    setConfirmOpen,
-    analyzing,
-    confirm,
-    finish
-  };
+  return { option, context, mode, setMode, url, setUrl, text, setText, uploads, setUploads, confirmOpen, setConfirmOpen, busy, stage, error, uncertain, allowed, ready, online, summary, confirm };
 }

@@ -1,15 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { authApi, type AuthSession, type Challenge, type Registration } from '../api/auth';
 import { apiErrorMessage, onSessionExpired, setAccessToken } from '../api/client';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
-import { usePwa } from './PwaContext';
 import { usePersistentState } from '../hooks/usePersistentState';
 import { useOfflineQueue, type OfflineQueueApi } from '../hooks/useOfflineQueue';
 import { initialTransactions } from '../data/credits';
 import { notificationTypes } from '../data/preferences';
 import { makeId } from '../utils/checks';
-import type { ConsumerSession, CreditTransaction, QueuedTask } from '../types/check';
+import type { ConsumerSession, CreditTransaction } from '../types/check';
 
 interface Preferences {
   country: string;
@@ -45,9 +44,7 @@ interface UserContextValue extends OfflineQueueApi {
 const UserContext = createContext<UserContextValue | null>(null);
 
 export function UserProvider({ children }: {children: ReactNode;}) {
-  const navigate = useNavigate();
   const location = useLocation();
-  const { online } = usePwa();
   const [session, setSession] = useState<ConsumerSession | null>(null);
   const [pendingSignup, setPendingSignup] = useState<(Registration & Challenge & { requestedAt: number }) | null>(null);
   const expiryTimer = useRef<number>();
@@ -143,15 +140,7 @@ export function UserProvider({ children }: {children: ReactNode;}) {
     [setCredits, setTransactions]
   );
 
-  const queueApi = useOfflineQueue({
-    online,
-    charge: (task: QueuedTask) => spendCredits(task.credits, task.label),
-    onReady: (task: QueuedTask) =>
-    toast.success('Your queued check is ready', {
-      description: task.label,
-      action: { label: 'View', onClick: () => navigate(`/result/${task.resultId}`) }
-    })
-  });
+  const queueApi = useOfflineQueue();
 
   const value = useMemo<UserContextValue>(
     () => ({
@@ -164,7 +153,7 @@ export function UserProvider({ children }: {children: ReactNode;}) {
       startSignup,
       verifySignup,
       resendSignup,
-      hasPermission: (permission) => session?.permissions.includes(permission) ?? false,
+      hasPermission: (permission) => Boolean(session?.permissions.includes(permission) || (session?.roles.includes('superadmin') && session.permissions.includes('*'))),
       credits,
       transactions,
       spendCredits,

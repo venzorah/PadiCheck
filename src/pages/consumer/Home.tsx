@@ -1,31 +1,26 @@
 import React, { useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowRightIcon, CameraIcon, ClipboardPasteIcon, HourglassIcon, Link2Icon, PencilLineIcon, StoreIcon, UploadIcon, UsersRoundIcon } from 'lucide-react';
+import { ArrowRightIcon, CameraIcon, ClipboardPasteIcon, Link2Icon, PencilLineIcon, StoreIcon, UploadIcon, UsersRoundIcon } from 'lucide-react';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { CreditPill } from '../../components/consumer/CreditPill';
 import { PageHeader } from '../../components/consumer/PageHeader';
-import { ResultRow } from '../../components/consumer/ResultRow';
+import { RecentInvestigations } from '../../components/consumer/RecentInvestigations';
 import { InstallCard } from '../../components/pwa/InstallCard';
 import { usePlatform } from '../../contexts/PlatformContext';
-import { useUser } from '../../contexts/UserContext';
 import { usePersistentState } from '../../hooks/usePersistentState';
-import { HomeTrustPanel } from '../../components/consumer/HomeTrustPanel';
 import { checkTypes } from '../../data/checkTypes';
 import { entityTypes } from '../../data/entityTypes';
-import { results } from '../../data/results';
 import { domainOf, extractUrl, looksLikeUrl } from '../../utils/checks';
 
 const typeShortcuts = checkTypes.filter((t) => t.id !== 'link');
 
 export function Home() {
   const navigate = useNavigate();
-  const { queue } = useUser();
   const [draft, setDraft] = usePersistentState('pc-draft-home', '');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const trimmed = draft.trim();
   const url = looksLikeUrl(trimmed) ? extractUrl(trimmed) : null;
-  const pending = queue.filter((t) => t.status !== 'done').length;
   const { getDoc } = usePlatform();
   const heading = getDoc('home-heading')?.body || 'What opportunity are you considering?';
   const subtext = getDoc('home-subtext')?.body || '';
@@ -209,35 +204,9 @@ export function Home() {
         </div>
 
         <div className="mt-9 space-y-4 lg:mt-0">
-          {pending > 0 &&
-          <Link to="/history?tab=pending" className="flex items-center gap-3 rounded-3xl bg-caution-soft p-4 transition-colors hover:bg-caution-soft/70">
-              <HourglassIcon className="h-5 w-5 shrink-0 text-caution" aria-hidden="true" />
-              <span className="flex-1 text-sm text-caution">
-                <strong className="font-semibold">
-                  {pending} check{pending > 1 ? 's' : ''} in your queue
-                </strong>
-                <span className="block">They’ll run automatically when you’re online.</span>
-              </span>
-              <ArrowRightIcon className="h-4 w-4 text-caution" aria-hidden="true" />
-            </Link>
-          }
-          <HomeTrustPanel />
+
           <InstallCard />
-          <section aria-labelledby="recent-heading">
-            <div className="flex items-center justify-between">
-              <h2 id="recent-heading" className="font-semibold text-ink">
-                Recent checks
-              </h2>
-              <Link to="/history" className="-mr-2 inline-flex h-11 items-center rounded-xl px-2 text-sm font-semibold text-brand-dark hover:bg-surface">
-                See all
-              </Link>
-            </div>
-            <ul className="mt-1 divide-y divide-line overflow-hidden rounded-3xl bg-surface">
-              {results.slice(0, 4).map((r) =>
-              <ResultRow key={r.id} result={r} />
-              )}
-            </ul>
-          </section>
+          <RecentInvestigations />
         </div>
       </div>
     </>);
