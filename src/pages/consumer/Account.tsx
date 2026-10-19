@@ -6,7 +6,6 @@ import { BookmarkIcon, Building2Icon, CodeIcon, CoinsIcon, FlagIcon, HistoryIcon
 import { useTrust } from "../../contexts/TrustContext";
 import { useTheme, ThemeMode } from "../../contexts/ThemeContext";
 import { usePlatform } from "../../contexts/PlatformContext";
-import { ConfirmSheet } from "../../components/ConfirmSheet";
 import { Switch } from "../../components/Switch";
 import { NotificationSheet } from "../../components/consumer/account/NotificationSheet";
 import { PreferenceSheet } from "../../components/consumer/account/PreferenceSheet";
@@ -32,7 +31,7 @@ const themeOptions: {
   label: 'Auto',
   icon: SmartphoneIcon
 }];
-type Sheet = null | 'notifications' | 'country' | 'currency' | 'language' | 'logoutAll' | 'delete';
+type Sheet = null | 'notifications' | 'country' | 'currency' | 'language';
 const providerLabels = {
   google: 'Google',
   apple: 'Apple',
@@ -77,8 +76,8 @@ export function Account() {
       description: 'Update checks run automatically in the installed app.'
     });
   };
-  const logOut = () => {
-    signOut();
+  const logOut = async () => {
+    await signOut();
     navigate('/signin', {
       replace: true
     });
@@ -147,11 +146,11 @@ export function Account() {
 
           <h2 className={heading}>Sign-in & security</h2>
           <ul className={group}>
-            <SettingsRow icon={ShieldCheckIcon} label="Security & privacy" hint="Password, two-factor, devices, data export" onClick={() => navigate('/account/security')} />
+            <SettingsRow icon={ShieldCheckIcon} label="Security & privacy" hint="Current session and available security options" onClick={() => navigate('/account/security')} />
             <SettingsRow icon={KeyRoundIcon} label="Signed in with" value={session ? providerLabels[session.provider] : ''} />
             <SettingsRow icon={LogOutIcon} label="Log out" onClick={logOut} />
-            <SettingsRow icon={MonitorSmartphoneIcon} label="Log out of all devices" hint="Ends every session, including this one" onClick={() => setSheet('logoutAll')} />
-            <SettingsRow icon={Trash2Icon} label="Delete account" tone="danger" onClick={() => setSheet('delete')} />
+            <SettingsRow icon={MonitorSmartphoneIcon} label="Log out of all devices" hint="Not available yet" onClick={() => toast('Signing out of all devices is not supported yet.')} />
+            <SettingsRow icon={Trash2Icon} label="Delete account" hint="Contact support" tone="danger" onClick={() => navigate('/contact')} />
           </ul>
 
           <h2 className={heading}>Help & policies</h2>
@@ -169,15 +168,6 @@ export function Account() {
       <PreferenceSheet open={sheet === 'country'} onClose={close} title="Country" options={countryOptions} value={preferences.country} onSelect={(v) => setPreference('country', v)} />
       <PreferenceSheet open={sheet === 'currency'} onClose={close} title="Currency" options={currencyOptions} value={preferences.currency} onSelect={(v) => setPreference('currency', v)} />
       <PreferenceSheet open={sheet === 'language'} onClose={close} title="Language" options={languageOptions} value={preferences.language} onSelect={(v) => setPreference('language', v)} />
-      <ConfirmSheet open={sheet === 'logoutAll'} onClose={close} onConfirm={() => {
-      toast.success('Signed out everywhere');
-      logOut();
-    }} title="Log out of all devices?" description="You’ll need to sign in again on every phone, tablet and computer." confirmLabel="Log out all" />
-      <ConfirmSheet open={sheet === 'delete'} onClose={close} onConfirm={() => {
-      toast('Your account is scheduled for deletion', {
-        description: 'We’ve emailed you a link to cancel within 14 days.'
-      });
-      logOut();
-    }} title="Delete your account?" description="Your reports, saved items and remaining credits will be permanently removed after 14 days." confirmLabel="Delete" tone="danger" requireText="DELETE" />
+
     </>;
 }

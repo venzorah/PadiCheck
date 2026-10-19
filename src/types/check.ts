@@ -67,6 +67,10 @@ export interface UploadItem {
 }
 
 export interface ConsumerSession {
+  id: string;
+  emailVerified: boolean;
+  roles: string[];
+  permissions: string[];
   name: string;
   email: string;
   provider: 'email' | 'google' | 'apple' | 'otp';

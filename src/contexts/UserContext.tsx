@@ -1,5 +1,7 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { authApi, type AuthSession, type Challenge, type Registration } from '../api/auth';
+import { apiErrorMessage, onSessionExpired, setAccessToken } from '../api/client';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { usePwa } from './PwaContext';
 import { usePersistentState } from '../hooks/usePersistentState';
@@ -17,8 +19,13 @@ interface Preferences {
 
 interface UserContextValue extends OfflineQueueApi {
   session: ConsumerSession | null;
-  signIn: (session: ConsumerSession) => void;
-  signOut: () => void;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  pendingSignup: (Registration & Challenge & { requestedAt: number }) | null;
+  startSignup: (registration: Registration) => Promise<void>;
+  verifySignup: (code: string) => Promise<void>;
+  resendSignup: () => Promise<void>;
+  hasPermission: (permission: string) => boolean;
   credits: number;
   transactions: CreditTransaction[];
   spendCredits: (amount: number, label: string) => boolean;
@@ -36,12 +43,59 @@ interface UserContextValue extends OfflineQueueApi {
 
 const UserContext = createContext<UserContextValue | null>(null);
 
-const defaultSession: ConsumerSession = { name: 'Adaeze Okafor', email: 'adaeze.okafor@gmail.com', provider: 'google' };
-
 export function UserProvider({ children }: {children: ReactNode;}) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { online } = usePwa();
-  const [session, setSession] = usePersistentState<ConsumerSession | null>('pc-session', defaultSession);
+  const [session, setSession] = useState<ConsumerSession | null>(null);
+  const [pendingSignup, setPendingSignup] = useState<(Registration & Challenge & { requestedAt: number }) | null>(null);
+  const expiryTimer = useRef<number>();
+  const clearSession = useCallback(() => {
+    setAccessToken(null);
+    setSession(null);
+    setPendingSignup(null);
+    window.clearTimeout(expiryTimer.current);
+  }, []);
+  useEffect(() => {
+    try { localStorage.removeItem('pc-session'); } catch { /* Storage can be blocked. */ }
+    const unsubscribe = onSessionExpired(clearSession);
+    return () => { unsubscribe(); window.clearTimeout(expiryTimer.current); setAccessToken(null); };
+  }, [clearSession]);
+  useEffect(() => {
+    if (location.pathname !== '/signup' && location.pathname !== '/verify-code') setPendingSignup(null);
+  }, [location.pathname]);
+  const acceptSession = useCallback(async (result: AuthSession) => {
+    const expiresAt = Date.now() + result.expires_in * 1000;
+    const { user } = await authApi.me(result.access_token);
+    if (Date.now() >= expiresAt) throw new Error('Session expired');
+    window.clearTimeout(expiryTimer.current);
+    setAccessToken(result.access_token);
+    setSession({ id: user.users_id, name: user.display_name, email: user.email, emailVerified: user.email_verified, roles: user.roles ?? [], permissions: user.permissions ?? [], provider: 'email' });
+    setPendingSignup(null);
+    expiryTimer.current = window.setTimeout(clearSession, expiresAt - Date.now());
+  }, [clearSession]);
+  const signIn = useCallback(async (email: string, password: string) => {
+    await acceptSession(await authApi.login(email, password));
+  }, [acceptSession]);
+  const startSignup = useCallback(async (registration: Registration) => {
+    const challenge = await authApi.register(registration);
+    setPendingSignup({ ...registration, ...challenge, requestedAt: Date.now() });
+  }, []);
+  const resendSignup = useCallback(async () => {
+    if (!pendingSignup) throw new Error('Please restart signup.');
+    const { display_name, email, password } = pendingSignup;
+    const challenge = await authApi.register({ display_name, email, password });
+    setPendingSignup({ display_name, email, password, ...challenge, requestedAt: Date.now() });
+  }, [pendingSignup]);
+  const verifySignup = useCallback(async (code: string) => {
+    if (!pendingSignup) throw new Error('Please restart signup.');
+    await acceptSession(await authApi.verify({ email: pendingSignup.email, challenge_id: pendingSignup.challenge_id, code }));
+  }, [pendingSignup, acceptSession]);
+  const signOut = useCallback(async () => {
+    try { await authApi.logout(); }
+    catch (error) { toast.error(`Signed out on this device. Server revocation could not be confirmed. ${apiErrorMessage(error)}`); }
+    finally { clearSession(); }
+  }, [clearSession]);
   const [credits, setCredits] = usePersistentState('pc-credits', 18);
   const [transactions, setTransactions] = usePersistentState<CreditTransaction[]>('pc-transactions', initialTransactions);
   const [savedIds, setSavedIds] = usePersistentState<string[]>('pc-saved', ['r-iphone', 'r-lekki', 'r-tenancy']);
@@ -99,8 +153,13 @@ export function UserProvider({ children }: {children: ReactNode;}) {
     () => ({
       ...queueApi,
       session,
-      signIn: setSession,
-      signOut: () => setSession(null),
+      signIn,
+      signOut,
+      pendingSignup,
+      startSignup,
+      verifySignup,
+      resendSignup,
+      hasPermission: (permission) => session?.permissions.includes(permission) ?? false,
       credits,
       transactions,
       spendCredits,
@@ -115,7 +174,7 @@ export function UserProvider({ children }: {children: ReactNode;}) {
       preferences,
       setPreference: (key, v) => setPreferences((p) => ({ ...p, [key]: v }))
     }),
-    [queueApi, session, setSession, credits, transactions, spendCredits, addCredits, savedIds, setSavedIds, dataSaver, setDataSaver, notificationPrefs, setNotificationPrefs, preferences, setPreferences]
+    [queueApi, session, signIn, signOut, pendingSignup, startSignup, verifySignup, resendSignup, credits, transactions, spendCredits, addCredits, savedIds, setSavedIds, dataSaver, setDataSaver, notificationPrefs, setNotificationPrefs, preferences, setPreferences]
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

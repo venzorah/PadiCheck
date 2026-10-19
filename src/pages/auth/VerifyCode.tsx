@@ -1,104 +1,65 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { CircleCheckIcon, LoaderCircleIcon, LockIcon } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { LoaderCircleIcon } from 'lucide-react';
 import { AuthShell } from '../../components/auth/AuthShell';
 import { OtpInput } from '../../components/auth/OtpInput';
+import { useUser } from '../../contexts/UserContext';
+import { apiErrorMessage, ApiError } from '../../api/client';
 
-type Channel = 'email' | 'phone' | '2fa' | 'recovery';
-
-const copy: Record<Channel, {title: string;sub: (to: string) => string;next: string;}> = {
-  email: { title: 'Verify your email', sub: (to) => `Enter the 6-digit code we sent to ${to || 'your email'}.`, next: '/verify-code?channel=phone' },
-  phone: { title: 'Verify your phone', sub: (to) => `We sent a code by SMS${to ? ` to ${to}` : ''}. This helps you recover your account.`, next: '/' },
-  '2fa': { title: 'Two-step verification', sub: () => 'Enter the code from your authenticator app.', next: '/' },
-  recovery: { title: 'Recover your account', sub: (to) => `Enter the code we sent to your recovery phone${to ? ` ${to}` : ''}.`, next: '/reset-password?token=demo-valid' }
-};
-
-const MAX_ATTEMPTS = 5;
-
-/** Shared OTP screen: email, phone, 2FA and recovery codes. Demo: 123456 is valid, 000000 is expired. */
 export function VerifyCode() {
-  const [params] = useSearchParams();
+  const { pendingSignup, verifySignup, resendSignup } = useUser();
   const navigate = useNavigate();
-  const channel = params.get('channel') as Channel ?? 'email';
-  const to = params.get('to') ?? '';
-  const c = copy[channel] ?? copy.email;
   const [code, setCode] = useState('');
-  const [state, setState] = useState<'idle' | 'checking' | 'invalid' | 'expired' | 'blocked' | 'success'>('idle');
-  const [attempts, setAttempts] = useState(0);
-  const [cooldown, setCooldown] = useState(30);
-
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [now, setNow] = useState(Date.now());
+  const [retryAt, setRetryAt] = useState(0);
+  const submitting = useRef(false);
   useEffect(() => {
-    if (cooldown <= 0) return;
-    const t = window.setTimeout(() => setCooldown((s) => s - 1), 1000);
-    return () => window.clearTimeout(t);
-  }, [cooldown]);
-
-  const verify = async (value = code) => {
-    if (value.length !== 6 || state === 'blocked') return;
-    setState('checking');
-    await new Promise((r) => window.setTimeout(r, 700));
-    if (value === '000000') return setState('expired');
-    if (value !== '123456') {
-      const n = attempts + 1;
-      setAttempts(n);
-      return setState(n >= MAX_ATTEMPTS ? 'blocked' : 'invalid');
-    }
-    setState('success');
-    window.setTimeout(() => navigate(c.next, { replace: true }), 900);
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  if (!pendingSignup) return (
+    <AuthShell title="Start signup again" subtitle="There is no pending email verification on this page. Reloading the app clears signup details.">
+      <Link to="/signup" className="font-semibold text-brand-dark">Create an account</Link>
+      <Link to="/signin" className="mt-4 block font-semibold text-brand-dark">Sign in instead</Link>
+    </AuthShell>
+  );
+  const cooldown = Math.max(0, Math.ceil((Math.max(pendingSignup.requestedAt + 60000, retryAt) - now) / 1000));
+  const expired = now >= pendingSignup.requestedAt + pendingSignup.expires_in * 1000;
+  const run = async (resend: boolean) => {
+    if (submitting.current || (resend ? cooldown > 0 : !/^\d{6}$/.test(code))) return;
+    submitting.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      if (resend) { await resendSignup(); setCode(''); setNow(Date.now()); }
+      else { await verifySignup(code); navigate('/', { replace: true }); }
+    } catch (failure) {
+      setError(apiErrorMessage(failure));
+      if (failure instanceof ApiError && failure.status === 429) {
+        const raw = failure.retryAfter;
+        const delay = raw && /^\d+$/.test(raw) ? Number(raw) * 1000 : raw ? Date.parse(raw) - Date.now() : 60000;
+        setRetryAt(Date.now() + (Number.isFinite(delay) ? Math.max(1000, delay) : 60000));
+      }
+    } finally { submitting.current = false; setBusy(false); }
   };
-
-  if (state === 'success') {
-    return (
-      <AuthShell title="Verified">
-        <CircleCheckIcon className="h-12 w-12 text-brand" aria-hidden="true" role="status" aria-label="Code accepted" />
-      </AuthShell>);
-
-  }
-
   return (
-    <AuthShell title={c.title} subtitle={c.sub(to)}>
-      <OtpInput
-        value={code}
-        onChange={(v) => {
-          setCode(v);
-          if (state === 'invalid' || state === 'expired') setState('idle');
-          if (v.length === 6) verify(v);
-        }}
-        invalid={state === 'invalid' || state === 'expired'}
-        disabled={state === 'checking' || state === 'blocked'} />
-      
-      <div className="mt-3 min-h-[24px]" aria-live="assertive">
-        {state === 'checking' &&
-        <p className="flex items-center gap-2 text-sm text-muted">
-            <LoaderCircleIcon className="h-4 w-4 animate-spin" aria-hidden="true" /> Checking…
-          </p>
-        }
-        {state === 'invalid' && <p className="text-sm text-danger">That code isn’t right. {MAX_ATTEMPTS - attempts} attempts left.</p>}
-        {state === 'expired' && <p className="text-sm text-danger">That code has expired. Send a new one.</p>}
-        {state === 'blocked' &&
-        <p className="flex gap-2 rounded-2xl bg-danger-soft p-3 text-sm text-danger">
-            <LockIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> Too many wrong codes. For your security, this is locked for 30 minutes. Contact support if you need help now.
-          </p>
-        }
-      </div>
-      <button
-        type="button"
-        disabled={cooldown > 0 || state === 'blocked'}
-        onClick={() => {
-          setCooldown(60);
-          setCode('');
-          setState('idle');
-        }}
-        className="mt-4 h-12 w-full rounded-2xl font-semibold text-ink ring-1 ring-line hover:bg-surface disabled:opacity-50">
-        
+    <AuthShell title="Verify your email" subtitle={`Enter the six-digit signup code for ${pendingSignup.email}.`}>
+      <p className="mb-4 text-sm text-muted">{pendingSignup.message}</p>
+      <form onSubmit={(event) => { event.preventDefault(); void run(false); }}>
+        <OtpInput value={code} onChange={setCode} disabled={busy || expired} invalid={Boolean(error)} />
+        {expired && <p className="mt-3 text-sm text-danger">This code has expired. Request a new one.</p>}
+        {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
+        <button disabled={busy || expired || code.length !== 6 || retryAt > now} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand font-semibold text-white disabled:opacity-50">
+          {busy && <LoaderCircleIcon className="h-5 w-5 animate-spin" aria-hidden="true" />} Verify email
+        </button>
+      </form>
+      <button type="button" disabled={busy || cooldown > 0} onClick={() => void run(true)} className="mt-4 h-12 w-full rounded-2xl font-semibold text-ink ring-1 ring-line disabled:opacity-50">
         {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
       </button>
-      <p className="mt-2 text-center text-xs text-muted">Demo: 123456 works · 000000 is expired</p>
-      {channel === 'phone' &&
-      <Link to="/" className="mt-4 block text-center text-sm font-semibold text-muted hover:text-ink">
-          Skip for now
-        </Link>
-      }
-    </AuthShell>);
-
+      <Link to="/signin" className="mt-4 block text-center text-sm font-semibold text-brand-dark">Already registered? Sign in</Link>
+      <Link to="/signup" className="mt-4 block text-center text-sm font-semibold text-muted">Use a different email</Link>
+    </AuthShell>
+  );
 }
