@@ -4,7 +4,7 @@ export interface InvestigationInput {
   investigation_type: InvestigationType;
   title?: string;
   user_prompt: string;
-  input_data?: { urls?: string[]; media_ids?: string[]; targets?: { entity_type: 'business' | 'person' | 'website' | 'job_listing' | 'property_listing' | 'service_provider' | 'other'; canonical_name: string; target_role?: 'primary' | 'related'; identifiers?: { identifier_type: string; value: string }[] }[] };
+  input_data?: { urls?: string[]; media_ids?: string[]; targets?: { entity_type: 'business' | 'person' | 'website' | 'job_listing' | 'property_listing' | 'service_provider' | 'other'; canonical_name: string; target_role?: 'primary' | 'candidate' | 'comparison'; identifiers?: { identifier_type: 'phone' | 'email' | 'url' | 'domain' | 'social_profile' | 'registration_number' | 'address' | 'other'; value: string }[] }[] };
 }
 export interface Investigation {
   investigation_id: string; user_id: string; investigation_type: InvestigationType;

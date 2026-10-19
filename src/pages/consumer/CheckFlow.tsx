@@ -1,5 +1,5 @@
 import { Link2Icon, PencilLineIcon, UploadIcon } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { BottomSheet } from '../../components/BottomSheet';
 import { PageHeader } from '../../components/consumer/PageHeader';
 import { FileUpload } from '../../components/check/FileUpload';
@@ -10,6 +10,11 @@ import type { InputMode } from '../../types/check';
 
 const tabs = [{ id: 'link', label: 'Link', icon: Link2Icon }, { id: 'text', label: 'Describe', icon: PencilLineIcon }, { id: 'upload', label: 'Documents', icon: UploadIcon }] as const;
 export function CheckFlow() {
+  const { type } = useParams();
+  const location = useLocation();
+  return <CheckFlowForm key={`${type}:${location.search}`} />;
+}
+function CheckFlowForm() {
   const flow = useCheckFlow();
   const { dataSaver } = useUser();
   const input = 'mt-2 w-full rounded-2xl bg-surface p-4 text-base text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-brand';

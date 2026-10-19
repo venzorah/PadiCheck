@@ -41,7 +41,7 @@ const groups: {label?: string;items: {to: string;label: string;icon: typeof Hous
 
 export function DesktopSidebar({ onNewCheck }: {onNewCheck: () => void;}) {
   const { online, install, requestInstall } = usePwa();
-  const { credits, queue } = useUser();
+  const { queue } = useUser();
   const { unreadCount } = useTrust();
   const pending = queue.filter((t) => t.status !== 'done').length;
   const badge = (k?: LinkKey) => k === 'history' ? pending : k === 'alerts' ? unreadCount : 0;
@@ -98,10 +98,7 @@ export function DesktopSidebar({ onNewCheck }: {onNewCheck: () => void;}) {
             <WifiOffIcon className="h-4 w-4" aria-hidden="true" /> Offline
           </p>
         }
-        <Link to="/credits" className="flex items-baseline gap-1.5 rounded-2xl bg-amber-soft px-4 py-3 transition-opacity hover:opacity-90">
-          <span className="text-xl font-bold text-ink">{credits}</span>
-          <span className="text-sm text-ink-soft">credits</span>
-        </Link>
+        <Link to="/history" className="rounded-2xl bg-surface px-4 py-3 text-sm font-semibold text-ink ring-1 ring-line">View investigations</Link>
         <div className="flex items-center gap-1">
           <ThemeToggle showLabel />
           {!install.installed &&
