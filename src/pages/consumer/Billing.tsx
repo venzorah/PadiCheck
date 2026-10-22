@@ -1,145 +1,113 @@
-import React, { useState } from 'react';
-import { toast } from 'sonner';
-import { ReceiptIcon } from 'lucide-react';
-import { BottomSheet } from '../../components/BottomSheet';
-import { ConfirmSheet } from '../../components/ConfirmSheet';
-import { PlanPicker } from '../../components/billing/PlanPicker';
-import { PageHeader } from '../../components/consumer/PageHeader';
-import { useTrust } from '../../contexts/TrustContext';
-import { planById } from '../../data/plans';
-import { track } from '../../utils/analytics';
-import { formatDate, formatNaira } from '../../utils/checks';
-import type { Invoice } from '../../types/trust';
-
-const invoiceTone = { paid: 'bg-brand-soft text-brand-dark', failed: 'bg-danger-soft text-danger', refunded: 'bg-canvas text-muted' };
-
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Action, ApiState, panelStyle } from '../../components/ApiUI';
+import { useApiData } from '../../hooks/useApiData';
+import { useUser } from '../../contexts/UserContext';
+import { billingApi, type BillingBalance, type BillingCheckout, type BillingOffer } from '../../api/billing';
+import { safeHttpUrl } from '../../utils/investigations';
+import { retryDelay } from '../../utils/investigationPolling';
+import { ApiError } from '../../api/client';
 export function Billing() {
-  const { subscription, setSubscription, invoices } = useTrust();
-  const [cancelOpen, setCancelOpen] = useState(false);
-  const [receipt, setReceipt] = useState<Invoice | null>(null);
-  const plan = planById(subscription.planId);
-  const paid = plan && plan.monthly > 0;
-
-  return (
-    <>
-      <PageHeader title="Subscription & billing" back="/account" />
-      <div className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-10 lg:px-10">
-        <section aria-labelledby="current-heading" className="rounded-3xl bg-surface p-5 md:p-6">
-          <h2 id="current-heading" className="text-sm font-medium text-muted">
-            Current plan
-          </h2>
-          <div className="mt-1 flex flex-wrap items-end gap-x-6 gap-y-3">
-            <div className="flex-1">
-              <p className="text-3xl font-bold text-ink">{plan?.name ?? 'Free'}</p>
-              <p className="mt-1 text-ink-soft">
-                {subscription.status === 'cancelled' ?
-                `Cancelled — access until ${formatDate(subscription.renewsAt)}` :
-                paid ?
-                `${formatNaira(subscription.period === 'monthly' ? plan.monthly : plan.yearly)} / ${subscription.period === 'monthly' ? 'month' : 'year'} · renews ${formatDate(subscription.renewsAt)}` :
-                'No payment needed'}
-              </p>
-            </div>
-            {paid && subscription.status === 'active' &&
-            <button type="button" onClick={() => setCancelOpen(true)} className="h-11 rounded-xl px-4 text-sm font-semibold text-danger ring-1 ring-line hover:bg-danger-soft">
-                Cancel plan
-              </button>
+    const { session } = useUser();
+    const offers = useApiData<{
+        enabled: boolean;
+        offers: BillingOffer[];
+    }>('/v1/billing/offers', false);
+    const balance = useApiData<BillingBalance>(session ? '/v1/billing/me' : null);
+    const [checkoutId, setCheckoutId] = useState(() => { try {
+        return sessionStorage.getItem('pc-checkout-id');
+    }
+    catch {
+        return null;
+    } });
+    const [checkout, setCheckout] = useState<BillingCheckout | null>(null);
+    const [error, setError] = useState<unknown>(null);
+    const [revision, setRevision] = useState(0);
+    const attempts = useRef(new Map<string, string>());
+    const purchaseLock = useRef(false);
+    const [purchasing, setPurchasing] = useState(false);
+    const balanceRefresh = useRef(balance.refresh);
+    balanceRefresh.current = balance.refresh;
+    useEffect(() => {
+        if (!checkoutId || !session)
+            return;
+        let stopped = false;
+        let timer: ReturnType<typeof setTimeout>;
+        let polls = 0;
+        const abort = new AbortController();
+        const read = async () => {
+            if (document.hidden) {
+                timer = setTimeout(() => void read(), 5000);
+                return;
             }
-            {subscription.status === 'cancelled' &&
-            <button
-              type="button"
-              onClick={() => {
-                setSubscription({ ...subscription, status: 'active' });
-                toast.success('Your plan will renew as normal');
-              }}
-              className="h-11 rounded-xl bg-brand px-4 text-sm font-semibold text-white">
-              
-                Resume plan
-              </button>
+            try {
+                const result = await billingApi.checkout(checkoutId, abort.signal);
+                if (stopped)
+                    return;
+                setCheckout(result.checkout);
+                setError(null);
+                balanceRefresh.current();
+                polls++;
+                if (polls < 60 && !['expired', 'failed', 'refunded'].includes(result.checkout.status))
+                    timer = setTimeout(() => void read(), 5000);
             }
-          </div>
-        </section>
-
-        <section aria-labelledby="plans-heading">
-          <h2 id="plans-heading" className="mb-4 text-xl font-bold text-ink">
-            Change plan
-          </h2>
-          <PlanPicker audience="consumer" signedIn />
-        </section>
-
-        <section aria-labelledby="history-heading">
-          <h2 id="history-heading" className="text-xl font-bold text-ink">
-            Billing history
-          </h2>
-          <table className="mt-3 w-full overflow-hidden rounded-3xl bg-surface text-left">
-            <caption className="sr-only">Invoices</caption>
-            <thead className="hidden text-sm text-muted md:table-header-group">
-              <tr>
-                <th scope="col" className="px-5 py-3 font-medium">Date</th>
-                <th scope="col" className="px-5 py-3 font-medium">Description</th>
-                <th scope="col" className="px-5 py-3 font-medium">Amount</th>
-                <th scope="col" className="px-5 py-3 font-medium">Status</th>
-                <th scope="col" className="px-5 py-3"><span className="sr-only">Receipt</span></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {invoices.map((i) =>
-              <tr key={i.id} className="flex flex-wrap items-center gap-x-3 px-5 py-3 md:table-row md:px-0">
-                  <td className="w-full text-sm text-muted md:w-auto md:px-5 md:py-3">{formatDate(i.at)}</td>
-                  <td className="flex-1 font-medium text-ink md:px-5 md:py-3">{i.label}</td>
-                  <td className="font-semibold text-ink md:px-5 md:py-3">{formatNaira(i.amountNaira)}</td>
-                  <td className="md:px-5 md:py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${invoiceTone[i.status]}`}>{i.status}</span>
-                  </td>
-                  <td className="md:px-5 md:py-3">
-                    <button type="button" onClick={() => setReceipt(i)} aria-label={`View receipt ${i.id}`} className="grid h-11 w-11 place-items-center rounded-xl text-muted hover:bg-canvas hover:text-ink">
-                      <ReceiptIcon className="h-5 w-5" />
-                    </button>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
-      </div>
-
-      <ConfirmSheet
-        open={cancelOpen}
-        onClose={() => setCancelOpen(false)}
-        onConfirm={() => {
-          setSubscription({ ...subscription, status: 'cancelled' });
-          track('subscription_cancelled', { plan: subscription.planId });
-          toast('Plan cancelled', { description: `You keep access until ${formatDate(subscription.renewsAt)}.` });
-          setCancelOpen(false);
-        }}
-        title="Cancel your plan?"
-        description={`You’ll keep ${plan?.name} until ${formatDate(subscription.renewsAt)}, then move to Free. Saved checks stay safe.`}
-        confirmLabel="Cancel plan"
-        tone="danger" />
-      
-      <BottomSheet open={receipt !== null} onClose={() => setReceipt(null)} title={`Receipt ${receipt?.id ?? ''}`}>
-        {receipt &&
-        <div>
-            <dl className="divide-y divide-line rounded-2xl bg-canvas text-sm">
-              {[
-            ['Date', formatDate(receipt.at)],
-            ['Description', receipt.label],
-            ['Paid with', receipt.method],
-            ['Amount', formatNaira(receipt.amountNaira)],
-            ['VAT (7.5%, included)', formatNaira(Math.round(receipt.amountNaira * 0.0698))],
-            ['Status', receipt.status]].
-            map(([k, v]) =>
-            <div key={k} className="flex justify-between gap-4 p-3.5">
-                  <dt className="text-muted">{k}</dt>
-                  <dd className="font-medium capitalize text-ink">{v}</dd>
-                </div>
-            )}
-            </dl>
-            <button type="button" onClick={() => window.print()} className="mt-4 h-12 w-full rounded-2xl font-semibold text-ink ring-1 ring-line">
-              Download invoice
-            </button>
-          </div>
+            catch (failure) {
+                if (stopped)
+                    return;
+                setError(failure);
+                if (!(failure instanceof ApiError && [401, 403, 404].includes(failure.status)))
+                    timer = setTimeout(() => void read(), retryDelay(failure, 15000));
+            }
+        };
+        void read();
+        return () => { stopped = true; abort.abort(); clearTimeout(timer); };
+    }, [checkoutId, session?.id, revision]); // eslint-disable-line react-hooks/exhaustive-deps
+    const buy = async (offer: BillingOffer) => {
+        if (purchaseLock.current)
+            return;
+        purchaseLock.current = true;
+        setPurchasing(true);
+        try {
+            let key = attempts.current.get(offer.offer_key);
+            if (!key) {
+                key = crypto.randomUUID();
+                attempts.current.set(offer.offer_key, key);
+            }
+            const result = await billingApi.create(offer.offer_key, key);
+            setCheckout(result.checkout);
+            setCheckoutId(result.checkout.billing_checkout_id);
+            try {
+                sessionStorage.setItem('pc-checkout-id', result.checkout.billing_checkout_id);
+            }
+            catch { /* Only the non-secret local UUID is retained. */ }
+            const url = safeHttpUrl(result.checkout.checkout_url);
+            if (result.checkout.status === 'open') {
+                if (!url)
+                    throw new Error('Checkout URL unavailable. Resume this checkout instead of creating another.');
+                window.location.assign(url);
+            }
         }
-      </BottomSheet>
-    </>);
-
+        finally {
+            purchaseLock.current = false;
+            setPurchasing(false);
+        }
+    };
+    return <div className="mx-auto max-w-4xl space-y-5 px-4 pb-10">
+    <h1 className="text-2xl font-bold text-ink">Investigation allowances & billing</h1>
+    <ApiState loading={offers.loading || balance.loading} error={offers.error || balance.error || error}/>
+    {offers.data?.enabled === false && <section className={panelStyle}><p className="text-muted">Billing is unavailable. Paid allowances are not enforced while billing is disabled.</p></section>}
+    {offers.data?.enabled && <>
+      {balance.data?.enabled && <section className={panelStyle}><h2 className="font-semibold text-ink">Available units: {balance.data.available_units}</h2><p className="text-sm text-muted">One unit per new investigation. Subscription units apply to each paid period; retrying the same failed investigation does not purchase another investigation.</p></section>}
+      {offers.data.offers.length === 0 && <p className="text-muted">No offers are configured.</p>}
+      <fieldset disabled={purchasing} className="space-y-4">{offers.data.offers.map(offer => <section key={offer.offer_key} className={panelStyle}><h2 className="font-semibold text-ink">{offer.display_name}</h2><p className="text-ink">{offer.currency} {offer.amount} · {offer.investigation_units} units · {offer.billing_mode === 'subscription' ? 'Subscription period allowance' : 'One-time purchase'}</p>{session ? <Action run={() => buy(offer)}>Open secure hosted checkout</Action> : <Link to="/signin" state={{ from: '/account/billing' }} className="text-brand-dark">Sign in to purchase</Link>}</section>)}</fieldset>
+    </>}
+    {checkoutId && <section className={panelStyle}><h2 className="font-semibold text-ink">Checkout status</h2>{!session ? <Link to="/signin" state={{ from: '/account/billing' }} className="text-brand-dark">Sign in again to check your payment</Link> : <><p className="text-muted">{checkout?.status || 'Checking owned checkout...'}</p><p className="text-sm text-muted">A browser return does not confirm payment. Paid status may precede allowance reconciliation. The backend balance is authoritative.</p><button onClick={() => setRevision(value => value + 1)} className="text-brand-dark">Refresh checkout and balance</button></>}<button onClick={() => { setCheckoutId(null); setCheckout(null); try {
+        sessionStorage.removeItem('pc-checkout-id');
+    }
+    catch { /* Storage unavailable. */ } }} className="block text-sm text-muted">Dismiss checkout status</button></section>}
+    {balance.data?.subscriptions.map(sub => <section key={sub.billing_subscription_id} className={panelStyle}><h2 className="font-semibold text-ink">Subscription</h2><p className="text-muted">{String(sub.provider_status || 'Status unavailable')}</p><Action run={async () => { const result = await billingApi.portal(sub.billing_subscription_id); const url = safeHttpUrl(result.url); if (!url)
+        throw new Error('Invalid portal URL.'); window.location.assign(url); }}>Manage in provider portal</Action></section>)}
+    <p className="text-sm text-muted">Purchase history, invoice downloads, direct plan changes and automatic refunds are unavailable. Payment details are collected only by the hosted provider.</p>
+  </div>;
 }
+export { Billing as Credits };
