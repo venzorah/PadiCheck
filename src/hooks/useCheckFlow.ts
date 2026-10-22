@@ -71,7 +71,7 @@ export function useCheckFlow() {
         setUncertain(true);
         setError('The submission could not be confirmed. Check History before starting another check; the server may have saved it.');
       } else if (failure instanceof ApiError && failure.status === 402) {
-        setError('You have no investigation units available. Billing integration is not available on this screen yet.');
+        setError('You have no investigation units available. Open Billing to choose an enabled offer, then start a new check deliberately.');
       } else setError(failure instanceof ApiError ? apiErrorMessage(failure) : failure instanceof Error ? failure.message : 'Could not submit this check.');
     } finally { inFlight.current = false; if (!abort.signal.aborted) setBusy(false); }
   };

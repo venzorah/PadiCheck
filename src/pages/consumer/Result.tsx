@@ -1,3 +1,4 @@
+import { ResourceList } from '../../components/ResourceUI';
 import { PrivateMediaLink } from '../../components/PrivateMediaLink';
 import { InvestigationSharing } from '../../components/InvestigationSharing';
 import { bookmarksApi } from '../../api/bookmarks';
@@ -181,6 +182,8 @@ export function Result() {
         <section className="space-y-2 rounded-3xl bg-caution-soft p-5 text-sm text-ink-soft"><h2 className="font-semibold">Capabilities and limitations</h2><p>Independent search: {data.capabilities.independent_search ? 'available' : 'unavailable'}. AI analysis: {data.capabilities.ai_analysis ? 'available' : 'unavailable'}.</p>{data.source_collection_complete && !data.capabilities.ai_analysis && <p>Source collection is complete. AI analysis is unavailable; this does not mean an AI result is ready.</p>}{data.limitations.map((note, index) => <p key={index}>{note}</p>)}</section>
         {investigation.user_id === session?.id && <div className="flex gap-3"><Action run={() => bookmarksApi.add(id)}>Save investigation</Action><Action run={() => bookmarksApi.remove(id)}>Remove bookmark</Action></div>}
         {canAct && investigation.status === 'completed' && <InvestigationSharing id={id}/>}
+        {data.targets.length > 0 && <section className="space-y-3 rounded-3xl bg-surface p-5"><h2 className="font-semibold text-ink">Research targets</h2>{data.targets.map((value,index)=>{const target=value as {entity_id?:string;canonical_name?:string};return <div key={index}><p className="text-ink">{target.canonical_name || 'Research target'}</p>{target.entity_id && hasPermission('reports.submit') && <Link className="text-sm text-brand-dark" to={'/report-issue?entity_id='+encodeURIComponent(target.entity_id)}>Submit an incident report about this target</Link>}</div>;})}</section>}
+        <ResourceList path={'/v1/investigations/'+encodeURIComponent(id)+'/model-runs'} collection="model_runs" title="Analysis runs"/>
         <Evidence key={id} id={id} refreshKey={`${investigation.status}:${data.source_collection_complete}:${investigation.updated_at}`}/>
       </>}
       <Link to="/history" className="inline-block font-semibold text-brand-dark">Back to history</Link>

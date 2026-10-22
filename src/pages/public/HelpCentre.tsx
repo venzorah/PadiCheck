@@ -13,7 +13,7 @@ export function HelpCentre() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string>('all');
   const [open, setOpen] = useState<string | null>(null);
-  const cmsHelp = docs.filter((d) => d.kind === 'help' && d.version > 0);
+  const cmsHelp: typeof docs = [];
 
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();

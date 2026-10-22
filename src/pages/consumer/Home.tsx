@@ -197,7 +197,7 @@ export function Home() {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block font-semibold text-ink">Jobs & Talent</span>
-              <span className="block text-sm text-ink-soft">Get job recommendations from your interests and qualifications — or find the right staff.</span>
+              <span className="block text-sm text-ink-soft">Marketplace unavailable. You can research a job offer through a normal check.</span>
             </span>
             <ArrowRightIcon className="h-5 w-5 shrink-0 text-violet" aria-hidden="true" />
           </Link>

@@ -42,7 +42,11 @@ export async function api<T>(path: string, options: {
   return data as T;
 }
 export function apiErrorMessage(error: unknown): string {
-  if (!(error instanceof ApiError)) return 'Could not connect. Check your connection and try again.';
+  if (!(error instanceof ApiError)) {
+    if (error instanceof SyntaxError) return 'Enter valid JSON configuration before submitting.';
+    if (error instanceof TypeError) return 'Could not connect. Check your connection and try again.';
+    return error instanceof Error ? error.message : 'The request could not complete. Please try again.';
+  }
   let message = error.status === 503 ? 'This service is currently unavailable. Please try again later.' : error.message;
   if (error.status === 429) message = `Too many requests. ${error.retryAfter ? `Retry after: ${error.retryAfter}.` : 'Please wait before trying again.'}`;
   return error.requestId ? `${message} (Reference: ${error.requestId})` : message;

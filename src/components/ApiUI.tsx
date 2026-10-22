@@ -17,14 +17,17 @@ export function Action({ run, children, danger = false, after }: {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<unknown>(null);
     const lock = useRef(false);
+    const [completed, setCompleted] = useState(false);
     return <div className="inline-block"><button type="button" disabled={busy} className={`${buttonStyle} ${danger ? 'bg-danger' : ''}`} onClick={async () => {
             if (lock.current || (danger && !window.confirm('Confirm this action?')))
                 return;
             lock.current = true;
             setBusy(true);
             setError(null);
+            setCompleted(false);
             try {
                 await run();
+                setCompleted(true);
                 after?.();
             }
             catch (failure) {
@@ -34,7 +37,7 @@ export function Action({ run, children, danger = false, after }: {
                 lock.current = false;
                 setBusy(false);
             }
-        }}>{busy ? 'Working...' : children}</button><ApiState error={error}/></div>;
+        }}>{busy ? 'Working...' : children}</button><ApiState error={error}/>{completed && <p role="status" className="text-xs text-brand-dark">Request completed.</p>}</div>;
 }
 export function Unavailable({ title, reason }: {
     title: string;

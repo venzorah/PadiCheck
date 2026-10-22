@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRightIcon, BadgeCheckIcon, QrCodeIcon, SearchIcon, StarIcon } from 'lucide-react';
+import { ArrowRightIcon, SearchIcon } from 'lucide-react';
 import { usePageMeta } from '../../hooks/usePageMeta';
 import { entityTypes } from '../../data/entityTypes';
-import { howSteps, popularChecks, safetyTips, testimonials, whyPoints } from '../../data/marketing';
+import { howSteps, popularChecks, safetyTips, whyPoints } from '../../data/marketing';
 import type { EntityType } from '../../types/trust';
 export function Landing() {
     const navigate = useNavigate();
@@ -115,27 +115,7 @@ export function Landing() {
         </ul>
       </section>
 
-      {/* Business verification */}
-      <section aria-labelledby="biz-heading" className="mx-auto max-w-6xl px-4 py-10 lg:px-10">
-        <div className="grid gap-8 rounded-[32px] bg-brand-soft p-6 md:p-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-          <div>
-            <h2 id="biz-heading" className="text-3xl font-bold text-ink">Run a business? Get verified.</h2>
-            <p className="mt-3 max-w-xl text-ink-soft">Show customers you’re real with a PadiCheck Verified badge, a shareable profile, a digital certificate and a QR code they can scan.</p>
-            <Link to="/for-business" className="mt-6 inline-flex h-12 items-center gap-2 rounded-2xl bg-brand px-6 font-semibold text-white hover:bg-brand-dark">
-              Get Verified <ArrowRightIcon className="h-4 w-4" aria-hidden="true"/>
-            </Link>
-          </div>
-          <div className="flex items-center gap-4 rounded-3xl bg-surface p-5">
-            <BadgeCheckIcon className="h-12 w-12 text-brand" aria-hidden="true"/>
-            <div>
-              <p className="font-semibold text-ink">PadiCheck Verified</p>
-              <p className="text-sm text-muted">Lekki Prime Homes Ltd · 91</p>
-            </div>
-            <QrCodeIcon className="ml-4 h-10 w-10 text-ink" aria-hidden="true"/>
-          </div>
-        </div>
-      </section>
-
+      <section className="mx-auto max-w-6xl px-4 py-10"><div className="space-y-4 rounded-3xl bg-brand-soft p-6"><h2 className="text-3xl font-bold text-ink">Business evidence review</h2><p className="text-muted">Choose a published business and submit private evidence for staff review. An approved request assigns the claim. Certificates, public certificate QR verification, customer reviews and numerical Trust Scores are unavailable.</p><Link to="/directory" className="inline-flex h-12 items-center rounded-2xl bg-brand px-5 font-semibold text-white">Explore directory</Link></div></section>
       {/* Why */}
       <section aria-labelledby="why-heading" className="mx-auto max-w-6xl px-4 py-12 lg:px-10">
         <h2 id="why-heading" className="text-3xl font-bold text-ink">Why PadiCheck</h2>
@@ -159,21 +139,6 @@ export function Landing() {
               </li>)}
           </ol>
         </div>
-      </section>
-
-      {/* Testimonials */}
-      <section aria-labelledby="reviews-heading" className="mx-auto max-w-6xl px-4 py-14 lg:px-10">
-        <h2 id="reviews-heading" className="text-3xl font-bold text-ink">People who checked first</h2>
-        <ul className="mt-6 grid gap-4 md:grid-cols-3">
-          {testimonials.map((t) => <li key={t.name} className="flex flex-col rounded-3xl bg-surface p-6">
-              <div className="flex gap-0.5 text-amber" aria-label="5 out of 5 stars">
-                {[0, 1, 2, 3, 4].map((i) => <StarIcon key={i} className="h-4 w-4" fill="currentColor" aria-hidden="true"/>)}
-              </div>
-              <blockquote className="mt-3 flex-1 text-ink">“{t.quote}”</blockquote>
-              <p className="mt-4 text-sm font-semibold text-ink">{t.name}</p>
-              <p className="text-sm text-muted">{t.role}</p>
-            </li>)}
-        </ul>
       </section>
 
       {/* CTA */}

@@ -28,6 +28,7 @@ interface UserContextValue extends OfflineQueueApi {
     verifyMfa: (code: string) => Promise<void>;
     cancelMfa: () => void;
     securityCodes: string[];
+    securityCompleted: boolean;
     completeSecurity: (codes?: string[]) => void;
     dismissSecurityCodes: () => void;
     pendingSignup: (Registration & Challenge & {
@@ -60,6 +61,7 @@ export function UserProvider({ children }: {
     const [pendingSignup, setPendingSignup] = useState<UserContextValue['pendingSignup']>(null);
     const [pendingMfa, setPendingMfa] = useState<UserContextValue['pendingMfa']>(null);
     const [securityCodes, setSecurityCodes] = useState<string[]>([]);
+    const [securityCompleted, setSecurityCompleted] = useState(false);
     const [notificationPrefs, setNotificationPrefs] = useState<Record<string, boolean>>({});
     const [dataSaver, setDataSaver] = usePersistentState('pc-data-saver', false);
     const [preferences, setPreferences] = usePersistentState<Preferences>('pc-preferences', { country: 'NG', currency: 'NGN', language: 'en' });
@@ -69,22 +71,21 @@ export function UserProvider({ children }: {
         setSession(null);
         setPendingSignup(null);
         setPendingMfa(null);
-        setSecurityCodes([]);
+        setSecurityCodes([]); setSecurityCompleted(false);
         setNotificationPrefs({});
         clearPrivateState();
         window.clearTimeout(expiryTimer.current);
     }, []);
     useEffect(() => { clearPrivateState(); const unsubscribe = onSessionExpired(clearSession); return () => { unsubscribe(); window.clearTimeout(expiryTimer.current); setAccessToken(null); }; }, [clearSession]);
     useEffect(() => { if (!['/signup', '/verify-code'].includes(location.pathname))
-        setPendingSignup(null); if (location.pathname !== '/security-complete')
-        setSecurityCodes([]); }, [location.pathname]);
+        setPendingSignup(null); if (location.pathname !== '/security-complete') { setSecurityCodes([]); setSecurityCompleted(false); } }, [location.pathname]);
     useEffect(() => { document.documentElement.classList.toggle('data-saver', dataSaver); }, [dataSaver]);
     useEffect(() => {
         if (!session)
             return;
         const abort = new AbortController();
         void notificationsApi.preferences(abort.signal).then(({ preferences: list }) => { if (!abort.signal.aborted)
-            setNotificationPrefs(Object.fromEntries(list.map((row) => [row.notification_type, row.enabled]))); }).catch(() => { });
+            setNotificationPrefs(Object.fromEntries(list.map((row) => [row.notification_type, row.enabled]))); }).catch(() => undefined);
         return () => abort.abort();
     }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
     const acceptSession = useCallback(async (result: AuthSession, provider: ConsumerSession['provider'] = 'email') => {
@@ -132,14 +133,14 @@ export function UserProvider({ children }: {
         window.google?.accounts.id.disableAutoSelect();
     } }, [clearSession]);
     const queue = useOfflineQueue();
-    const value = useMemo<UserContextValue>(() => ({ ...queue, session, pendingSignup, pendingMfa, securityCodes, clearSession, signIn, signInWithGoogle, signOut, startSignup, verifySignup, resendSignup, verifyMfa,
-        cancelMfa: () => setPendingMfa(null), completeSecurity: (codes = []) => { clearSession(); setSecurityCodes(codes); }, dismissSecurityCodes: () => setSecurityCodes([]),
+    const value = useMemo<UserContextValue>(() => ({ ...queue, session, pendingSignup, pendingMfa, securityCodes, securityCompleted, clearSession, signIn, signInWithGoogle, signOut, startSignup, verifySignup, resendSignup, verifyMfa,
+        cancelMfa: () => setPendingMfa(null), completeSecurity: (codes = []) => { clearSession(); setSecurityCodes(codes); setSecurityCompleted(true); }, dismissSecurityCodes: () => { setSecurityCodes([]); setSecurityCompleted(false); },
         hasPermission: (permission) => Boolean(session?.permissions.includes(permission) || (session?.roles.includes('superadmin') && session.permissions.includes('*'))),
         credits: 0, transactions: [], spendCredits: () => false, addCredits: () => { throw new Error('Client credit grants are not supported.'); }, savedIds: [], isSaved: () => false, toggleSaved: () => { throw new Error('Use server investigation bookmarks.'); },
         dataSaver, setDataSaver, notificationPrefs, setNotificationPref: (id, on) => { if (!['investigation.completed', 'investigation.failed', 'business.invitation'].includes(id))
             return; void notificationsApi.setPreference(id as Parameters<typeof notificationsApi.setPreference>[0], on).then(() => setNotificationPrefs((old) => ({ ...old, [id]: on }))).catch((error) => toast.error(apiErrorMessage(error))); },
         preferences, setPreference: (key, value) => setPreferences((old) => ({ ...old, [key]: value }))
-    }), [queue, session, pendingSignup, pendingMfa, securityCodes, clearSession, signIn, signInWithGoogle, signOut, startSignup, verifySignup, resendSignup, verifyMfa, dataSaver, setDataSaver, notificationPrefs, preferences, setPreferences]);
+    }), [queue, session, pendingSignup, pendingMfa, securityCodes, securityCompleted, clearSession, signIn, signInWithGoogle, signOut, startSignup, verifySignup, resendSignup, verifyMfa, dataSaver, setDataSaver, notificationPrefs, preferences, setPreferences]);
     return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }
 export function useUser() { const context = useContext(UserContext); if (!context)

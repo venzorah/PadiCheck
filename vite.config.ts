@@ -30,6 +30,10 @@ export default defineConfig(({ mode }) => {
         for (const worker of workers()) this.emitFile({ type: 'asset', fileName: worker.path.slice(1), source: worker.source })
       },
     }],
-    server: { proxy: Object.fromEntries(['/v1', '/health', '/ready'].map((path) => [path, { target, changeOrigin: true }])) },
+    server: {
+      allowedHosts: ['jean-unprospering-numerically.ngrok-free.dev'],
+      watch: { ignored: ['**/.tmp/**'] },
+      proxy: Object.fromEntries(['/v1', '/health', '/ready'].map((path) => [path, { target, changeOrigin: true }])),
+    },
   }
 })

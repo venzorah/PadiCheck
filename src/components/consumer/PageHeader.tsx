@@ -39,7 +39,7 @@ export function PageHeader({ title, back, actions, brand }: PageHeaderProps) {
           <p role="status" className="flex items-center gap-2 rounded-xl bg-caution-soft px-3 py-2 text-sm text-caution">
             <WifiOffIcon className="h-4 w-4 shrink-0" aria-hidden="true"/>
             <span>
-              You’re offline. Saved results still work{waiting > 0 ? ` · ${waiting} check${waiting > 1 ? 's' : ''} waiting` : ''}.
+              Offline: reconnect to load private investigations or submit a check.
             </span>
           </p>
         </div>}

@@ -38,6 +38,7 @@ function CheckFlowForm() {
           {!flow.online && <p role="status" className="mt-4 text-sm text-muted">Reconnect to submit. Checks are not submitted automatically while offline.</p>}
           {flow.error && <p role="alert" className="mt-4 rounded-2xl bg-danger-soft p-4 text-sm text-danger">{flow.error}</p>}
           {flow.busy && <p role="status" className="mt-4 text-sm text-muted">{flow.stage}</p>}
+          {flow.error.includes('no investigation units') && <Link to="/account/billing" className="mt-4 inline-block font-semibold text-brand-dark">View billing offers</Link>}
           {flow.uncertain && <Link to="/history" className="mt-4 inline-block font-semibold text-brand-dark">Check History</Link>}
         </section>
         <aside className="rounded-3xl bg-surface p-6">

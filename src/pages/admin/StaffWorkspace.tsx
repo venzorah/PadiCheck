@@ -1,3 +1,4 @@
+import { reviewTransitions } from '../../utils/reviewTransitions';
 import { Suspense, useState } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useUser } from '../../contexts/UserContext';
@@ -44,10 +45,13 @@ function StaffSection({ section }: {
     {isAi && <p className="text-sm text-muted">Registry references select configured server credentials; never enter actual API secrets. Changes to agent instructions require a new prompt version. Registry deletion is unsupported.</p>}
     <ResourceList key={`${section}:${revision}`} path={path} collection={isAi ? 'entries' : resource} render={(row, refresh) => {
             const id = String(row[idKey] ?? '');
+            const nextStates = reviewTransitions(section, String(row.status));
+            const submittedBy = row.submitted_by_user_id ?? row.filed_by_user_id;
+            const canReview = nextStates.length > 0 && submittedBy !== session?.id;
             return <><RecordView record={row}/>{!id && !(isBilling && resource === 'events') && <p className="text-sm text-muted">No actionable record identifier was returned.</p>}{id && <>
         {(isAi && resource !== 'agent-tools' || section === 'businesses' || section === 'billing/offers') && <details className="mt-4"><summary className="cursor-pointer text-brand-dark">Edit supported fields</summary><SchemaForm operation={`PATCH ${path}/{id}`} path={`${path}/${id}`} omit={!superadmin ? ['credential_secret_ref'] : []} after={refresh} label="Update record"/></details>}
         {section === 'businesses' && hasPermission('directory.manage') && <details className="mt-4"><summary className="cursor-pointer text-brand-dark">Change publication status</summary><SchemaForm operation="POST /v1/admin/businesses/{id}/publication" path={`${path}/${id}/publication`} after={refresh}/></details>}
-        {['reports', 'verifications', 'disputes'].includes(section) && <><button className="mt-3 text-brand-dark" onClick={() => setSelected(selected === id ? null : id)}>Open submission details</button>{selected === id && <ReviewEvidence kind={section} id={id}/>}<details className="mt-4"><summary className="cursor-pointer text-brand-dark">Review submission</summary><p className="my-3 text-sm text-muted">Self-review and claimed-business conflicts are rejected by the server. Review status transitions remain authoritative. For disputes, include report action only when resolving.</p><SchemaForm operation={`POST ${path}/{id}/review`} path={`${path}/${id}/review`} after={refresh} label="Submit review decision"/></details></>}
+        {['reports', 'verifications', 'disputes'].includes(section) && <><button className="mt-3 text-brand-dark" onClick={() => setSelected(selected === id ? null : id)}>Open submission details</button>{selected === id && <ReviewEvidence kind={section} id={id}/>}<details className="mt-4"><summary className="cursor-pointer text-brand-dark">Review submission</summary><p className="my-3 text-sm text-muted">Self-review and claimed-business conflicts are rejected by the server. Review status transitions remain authoritative. For disputes, include report action only when resolving.</p><>{canReview ? <SchemaForm operation={`POST ${path}/{id}/review`} path={`${path}/${id}/review`} after={refresh} label="Submit review decision" choices={{status:nextStates,...(section==='disputes' && !hasPermission('reports.moderate')?{report_action:['keep']}:{})}}/> : <p className="text-sm text-muted">This submission is terminal or belongs to the current reviewer. No review action is available.</p>}</></details></>}
         {section === 'billing/grants' && <details className="mt-3"><summary className="text-danger">Revoke allowance grant</summary><SchemaForm operation="POST /v1/admin/billing/grants/{id}/revoke" path={`${path}/${id}/revoke`} after={refresh}/></details>}
       </>}</>;
         }}/>

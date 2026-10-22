@@ -65,7 +65,7 @@ test('checkout retries reuse a caller-owned request key and never submit prices 
 });
 function workerHarness(app='consumer'){
  const events={};let cacheOpens=0;const timers=[];
- const context=createContext({URL,Request,Response,FormData,File,crypto:globalThis.crypto,setTimeout:callback=>{timers.push(callback);return timers.length;},self:{location:{origin:'https://app.test'},addEventListener:(event,handler)=>{events[event]=handler;}},caches:{open:async()=>{cacheOpens++;return {match:async()=>undefined,put:async()=>{}};},keys:async()=>[]},fetch:async()=>new Response('static')});
+ const context=createContext({URL,URLSearchParams,Request,Response,FormData,File,crypto:globalThis.crypto,setTimeout:callback=>{timers.push(callback);return timers.length;},self:{location:{origin:'https://app.test'},addEventListener:(event,handler)=>{events[event]=handler;}},caches:{open:async()=>{cacheOpens++;return {match:async()=>undefined,put:async()=>{}};},keys:async()=>[]},fetch:async()=>new Response('static')});
  new Script(buildServiceWorkerSource(app,'test-version',app==='consumer'?'/':'/admin/')).runInContext(context);
  return {events,opens:()=>cacheOpens};
 }
@@ -81,4 +81,25 @@ test('share files live only in worker memory, are consumed once and clear on log
  const redirect=await response;const id=new URL(redirect.headers.get('Location')).searchParams.get('share_id');assert.ok(id);let received;
  const read=()=>worker.events.message({data:{type:'READ_SHARE_INBOX',id},ports:[{postMessage:files=>{received=files;}}]});read();assert.equal(received.length,1);read();assert.equal(received.length,0);
  worker.events.message({data:{type:'CLEAR_PRIVATE_STATE'}});assert.equal(worker.opens(),0);
+});
+const {reviewTransitions}=await import(encode(await read('utils/reviewTransitions.ts')));
+test('staff review options preserve terminal states and separate decision workflows',()=>{
+ assert.deepEqual(reviewTransitions('verifications','pending'),['in_review','approved','rejected']);
+ assert.deepEqual(reviewTransitions('reports','published'),['under_review','rejected']);
+ assert.deepEqual(reviewTransitions('disputes','under_review'),['resolved','rejected']);
+ for(const kind of ['verifications','reports','disputes'])assert.deepEqual(reviewTransitions(kind,'withdrawn'),[]);
+ assert.deepEqual(reviewTransitions('verifications','approved'),[]);assert.deepEqual(reviewTransitions('disputes','resolved'),[]);
+});
+test('logout/account cleanup removes private local/session/share data while retaining approved UI preferences and checkout UUID',async()=>{
+ const shareURL=encode(await read('utils/shareInbox.ts'));const share=await import(shareURL);
+ const privacy=await import(encode((await read('utils/privateState.ts')).replace(/(['"])\.\/shareInbox\1/,JSON.stringify(shareURL))));
+ const names=['localStorage','sessionStorage','navigator','caches'];const descriptors=new Map(names.map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]));
+ const storage=values=>Object.assign({removeItem(key){delete this[key];}},values);const local=storage({'pc-session':'old','pc-trust-entities':'old','pc-theme-v2':'dark','pc-data-saver':'true'});const temporary=storage({'pc-old-token':'old','pc-checkout-id':'non-secret-local-uuid'});const deleted=[];const messages=[];
+ try{
+  Object.defineProperty(globalThis,'localStorage',{configurable:true,value:local});Object.defineProperty(globalThis,'sessionStorage',{configurable:true,value:temporary});
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{serviceWorker:{controller:{postMessage:message=>messages.push(message)}}}});
+  Object.defineProperty(globalThis,'caches',{configurable:true,value:{keys:async()=>['pc-share-inbox','pc-private-data','pc-consumer-shell'],delete:async key=>{deleted.push(key);return true;}}});
+  share.putSharedFiles([new File(['fixture'],'evidence.pdf')]);privacy.clearPrivateState();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(local['pc-session'],undefined);assert.equal(local['pc-trust-entities'],undefined);assert.equal(local['pc-theme-v2'],'dark');assert.equal(local['pc-data-saver'],'true');assert.equal(temporary['pc-old-token'],undefined);assert.equal(temporary['pc-checkout-id'],'non-secret-local-uuid');assert.equal(share.takeSharedFiles().length,0);assert.equal(messages[0].type,'CLEAR_PRIVATE_STATE');assert.deepEqual(deleted.sort(),['pc-private-data','pc-share-inbox']);
+ }finally{for(const name of names){const descriptor=descriptors.get(name);if(descriptor)Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}}
 });

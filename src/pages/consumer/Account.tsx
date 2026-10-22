@@ -141,7 +141,7 @@ export function Account() {
 
           <h2 className={heading}>Help & policies</h2>
           <ul className={group}>
-            {docs.filter((d) => d.kind !== 'copy' && d.version > 0).sort((a, b) => a.kind === b.kind ? 0 : a.kind === 'help' ? -1 : 1).map((d) => <SettingsRow key={d.id} icon={d.kind === 'help' ? BoxIcon : ScaleIcon} label={d.title} hint={d.summary} onClick={() => navigate(`/legal/${d.slug}`)}/>)}
+            {docs.filter((d) => d.kind === 'legal' && d.version > 0).sort((a, b) => a.kind === b.kind ? 0 : a.kind === 'help' ? -1 : 1).map((d) => <SettingsRow key={d.id} icon={d.kind === 'help' ? BoxIcon : ScaleIcon} label={d.title} hint={d.summary} onClick={() => navigate(`/legal/${d.slug}`)}/>)}
           </ul>
           <p className="mt-6 px-1 text-xs text-muted">
             {identity.name} {identity.version} · Offline support {sw.status === 'active' ? 'active' : 'available in the installed app'}

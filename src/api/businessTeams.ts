@@ -6,6 +6,8 @@ export interface Invitation {
     member_role: MemberRole;
     email?: string;
     expires_at: string;
+    accepted_at?: string | null;
+    revoked_at?: string | null;
 }
 export interface Team {
     owner_user_id: string;
