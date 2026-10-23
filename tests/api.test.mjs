@@ -124,6 +124,12 @@ test('Google conflicts direct the user to explicit linking or email verification
   assert.match(googleErrorMessage(new client.ApiError(503, 'google_auth_unavailable', 'Unavailable')), /currently unavailable/);
 });
 
+test('Google challenge and linking failures give actionable messages', () => {
+  assert.match(googleErrorMessage(new client.ApiError(401, 'invalid_google_challenge', 'Expired')), /fresh sign-in/);
+  assert.match(googleErrorMessage(new client.ApiError(409, 'verified_email_required', 'Mismatch')), /same email/);
+  assert.match(googleErrorMessage(new client.ApiError(409, 'google_identity_linked', 'Conflict')), /another PadiCheck account/);
+});
+
 test('Google SDK load failures permit retry and concurrent callers share one script', async () => {
   const originalWindow = globalThis.window;
   const originalDocument = globalThis.document;
