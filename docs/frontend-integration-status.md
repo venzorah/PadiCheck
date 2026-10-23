@@ -1,5 +1,7 @@
 # Frontend integration handoff
 
+> Update, 23 October 2026: the UI restoration described in [ui-restoration.md](ui-restoration.md) supersedes the presentation and screen-routing claims below. The generic StaffWorkspace is no longer the admin landing page; the original admin routes are restored. This older handoff records the earlier integration, not current visual acceptance or full endpoint coverage.
+
 22 October 2026, Africa/Lagos. References: backend `frontend-ai-integration.md`, `frontend-integration.md`, `platform-extension.md`, `api-reference.md`, `openapi.json`, `payments.md`; contract dated 21 October 2026.
 
 Supported frontend workflows are implemented in the existing React/Vite application. The backend is now running and public live checks pass. Authenticated/provider acceptance remains in progress. No backend source/schema was changed, database reset, or backend environment secrets read/copied.

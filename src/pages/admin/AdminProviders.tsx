@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { LockIcon } from 'lucide-react';
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader';
@@ -6,18 +6,20 @@ import { StatusPill } from '../../components/admin/StatusPill';
 import { Switch } from '../../components/Switch';
 import { useAdminSession } from '../../contexts/AdminSessionContext';
 import { usePwa } from '../../contexts/PwaContext';
-import { aiProviders } from '../../data/adminOps';
+import { useAdminProviders } from '../../hooks/useAdminPresentation';
+import { api, apiErrorMessage } from '../../api/client';
+import { ApiState } from '../../components/ApiUI';
 
 export function AdminProviders() {
+  const providerState=useAdminProviders();const aiProviders=providerState.rows;
   const { permissions } = useAdminSession();
   const { online } = usePwa();
-  const [routing, setRouting] = useState<Record<string, boolean>>(Object.fromEntries(aiProviders.map((p) => [p.id, p.routing])));
   const canManage = permissions.manageProviders && online;
 
   return (
     <>
-      <AdminPageHeader title="AI Providers" subtitle="Live performance over the last 24 hours. Traffic fails over automatically." />
-      <div className="px-4 md:px-8">
+      <AdminPageHeader title="AI Providers" subtitle="Provider configuration and routing. Performance metrics are unavailable." />
+      <div className="px-4 md:px-8"><ApiState loading={providerState.loading} error={providerState.error}/>
         {!permissions.manageProviders &&
         <p className="mb-3 flex items-center gap-2 text-sm text-muted">
             <LockIcon className="h-4 w-4" aria-hidden="true" /> View only — routing changes need a super admin.
@@ -47,26 +49,23 @@ export function AdminProviders() {
                 <dl className="col-span-2 grid grid-cols-3 gap-2 text-sm lg:contents">
                   <div className="lg:text-right">
                     <dt className="text-muted lg:sr-only">Latency</dt>
-                    <dd className={`font-medium tabular-nums ${p.latencyMs > 4000 ? 'text-caution' : 'text-ink'}`}>{(p.latencyMs / 1000).toFixed(1)}s</dd>
+                    <dd className={`font-medium tabular-nums ${p.latencyMs > 4000 ? 'text-caution' : 'text-ink'}`}>{Number.isFinite(p.latencyMs)?(p.latencyMs/1000).toFixed(1)+'s':'\u2014'}</dd>
                   </div>
                   <div className="lg:text-right">
                     <dt className="text-muted lg:sr-only">Errors</dt>
-                    <dd className={`font-medium tabular-nums ${p.errorRate > 3 ? 'text-danger' : 'text-ink'}`}>{p.errorRate}%</dd>
+                    <dd className={`font-medium tabular-nums ${p.errorRate > 3 ? 'text-danger' : 'text-ink'}`}>{Number.isFinite(p.errorRate)?p.errorRate+'%':'\u2014'}</dd>
                   </div>
                   <div className="lg:text-right">
                     <dt className="text-muted lg:sr-only">Requests</dt>
-                    <dd className="font-medium tabular-nums text-ink">{p.requests24h.toLocaleString()}</dd>
+                    <dd className="font-medium tabular-nums text-ink">{Number.isFinite(p.requests24h)?p.requests24h.toLocaleString():'\u2014'}</dd>
                   </div>
                 </dl>
                 <div className="col-span-2 flex items-center justify-between border-t border-line pt-1 lg:col-span-1 lg:justify-end lg:border-0 lg:pt-0">
                   <span className="text-sm text-muted lg:sr-only">Route traffic</span>
                   <Switch
-                  checked={routing[p.id]}
+                  checked={p.routing}
                   disabled={!canManage}
-                  onChange={(on) => {
-                    setRouting((r) => ({ ...r, [p.id]: on }));
-                    toast(on ? `Routing traffic to ${p.name}` : `${p.name} drained — using ${p.fallback}`);
-                  }}
+                  onChange={async(on)=>{try{await api('/v1/admin/ai/providers/'+p.id,{auth:true,method:'PATCH',json:{is_enabled:on}});providerState.refresh();toast('Provider updated');}catch(error){toast.error(apiErrorMessage(error));}}}
                   label={`Route traffic to ${p.name}`} />
                 
                 </div>

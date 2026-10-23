@@ -1,7 +1,6 @@
+import { toast } from 'sonner';
 import { useEffect, useRef, useState } from 'react';
-import { usePersistentState } from './usePersistentState';
-import { candidates, jobListings } from '../data/talent';
-import { matchCandidates, matchJobs } from '../utils/talentMatch';
+import { jobListings } from '../data/talent';
 import type { Candidate, HiringBrief, JobListing, Match, SeekerProfile } from '../types/talent';
 
 type Status = 'idle' | 'loading' | 'done';
@@ -10,36 +9,26 @@ const defaultProfile: SeekerProfile = { interests: [], skills: [], education: 'b
 const defaultBrief: HiringBrief = { role: '', interest: 'Finance & Accounting', skills: [], minEducation: 'hnd', minYears: 1, location: 'Lagos', mode: 'On-site' };
 
 export function useTalentMatches() {
-  const [profile, setProfile] = usePersistentState<SeekerProfile>('pc-talent-profile', defaultProfile);
-  const [brief, setBrief] = usePersistentState<HiringBrief>('pc-talent-brief', defaultBrief);
-  const [savedJobs, setSavedJobs] = usePersistentState<string[]>('pc-talent-saved', []);
-  const [shortlist, setShortlist] = usePersistentState<string[]>('pc-talent-shortlist', []);
-  const [intros, setIntros] = usePersistentState<string[]>('pc-talent-intros', []);
-  const [jobStatus, setJobStatus] = useState<Status>('idle');
-  const [hireStatus, setHireStatus] = useState<Status>('idle');
-  const [jobMatches, setJobMatches] = useState<Match<JobListing>[]>([]);
-  const [candidateMatches, setCandidateMatches] = useState<Match<Candidate>[]>([]);
+  const [profile, setProfile] = useState<SeekerProfile>(defaultProfile);
+  const [brief, setBrief] = useState<HiringBrief>(defaultBrief);
+  const [savedJobs, setSavedJobs] = useState<string[]>([]);
+  const [shortlist, setShortlist] = useState<string[]>([]);
+  const [intros, setIntros] = useState<string[]>([]);
+  const [jobStatus] = useState<Status>('idle');
+  const [hireStatus] = useState<Status>('idle');
+  const [jobMatches] = useState<Match<JobListing>[]>([]);
+  const [candidateMatches] = useState<Match<Candidate>[]>([]);
   const timer = useRef<number>();
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   const findJobs = () => {
-    setJobStatus('loading');
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => {
-      setJobMatches(matchJobs(profile, jobListings));
-      setJobStatus('done');
-    }, 900);
-  };
+    toast('Job matching is not available yet. You can research a job offer through Check Now.');
+};
 
   const findCandidates = () => {
-    setHireStatus('loading');
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => {
-      setCandidateMatches(matchCandidates(brief, candidates));
-      setHireStatus('done');
-    }, 900);
-  };
+    toast('Candidate matching is not available yet.');
+};
 
   const toggle = (list: string[], id: string) => list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 

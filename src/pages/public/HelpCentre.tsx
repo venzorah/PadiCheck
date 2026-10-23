@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDownIcon, SearchIcon } from 'lucide-react';
 import { StateView } from '../../components/trust/StateView';
@@ -13,7 +13,7 @@ export function HelpCentre() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string>('all');
   const [open, setOpen] = useState<string | null>(null);
-  const cmsHelp: typeof docs = [];
+  const cmsHelp = docs.filter((d) => d.kind === 'help' && d.version > 0);
 
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();

@@ -88,11 +88,12 @@ export function GoogleSignIn({ action, onCredential, disabled = false, onBusyCha
     }
   };
 
-  if (!clientId) return <p className="text-sm text-muted">Google {action === 'link' ? 'account linking' : 'sign-in'} is not available yet.</p>;
+  if (!clientId) return <button type="button" disabled title="Google sign-in is not configured yet" className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-surface font-semibold text-ink ring-1 ring-line transition-colors hover:bg-canvas disabled:opacity-60"><span className="text-lg font-bold text-[#4285F4]" aria-hidden="true">G</span>{action === 'link' ? 'Link Google account' : 'Continue with Google'}</button>;
   return (
     <div className="space-y-3">
       {(state === 'idle' || state === 'loading') && <button type="button" disabled={disabled || state === 'loading'} onClick={() => void start()} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-surface font-semibold text-ink ring-1 ring-line disabled:opacity-50">
         {state === 'loading' && <LoaderCircleIcon className="h-5 w-5 animate-spin" aria-hidden="true" />}
+        {state === 'idle' && <span className="text-lg font-bold text-[#4285F4]" aria-hidden="true">G</span>}
         {action === 'link' ? 'Link Google account' : 'Continue with Google'}
       </button>}
       <div ref={container} />

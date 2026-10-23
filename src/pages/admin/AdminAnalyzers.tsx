@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { RotateCcwIcon, UndoIcon } from 'lucide-react';
@@ -7,15 +7,20 @@ import { ConfirmSheet } from '../../components/ConfirmSheet';
 import { Switch } from '../../components/Switch';
 import { useAdminSession } from '../../contexts/AdminSessionContext';
 import { usePwa } from '../../contexts/PwaContext';
-import { analyzers, failedAnalyses } from '../../data/adminOps';
+import { failedAnalyses } from '../../data/adminOps';
 import { formatWhen, getCheckType } from '../../utils/checks';
 import type { FailedAnalysis } from '../../types/admin';
 
+import { useAdminTasks } from '../../hooks/useAdminPresentation';
+import { api, apiErrorMessage } from '../../api/client';
+import { ApiState } from '../../components/ApiUI';
+
 export function AdminAnalyzers() {
+  const tasks=useAdminTasks();
+  const analyzers=tasks.rows;
   const { permissions, log } = useAdminSession();
   const { online } = usePwa();
   const [failed, setFailed] = useState(failedAnalyses);
-  const [enabled, setEnabled] = useState<Record<string, boolean>>(Object.fromEntries(analyzers.map((a) => [a.id, a.enabled])));
   const [refunding, setRefunding] = useState<FailedAnalysis | null>(null);
 
   const removeItem = (id: string) => setFailed((list) => list.filter((f) => f.id !== id));
@@ -89,20 +94,17 @@ export function AdminAnalyzers() {
                   <p className="font-medium text-ink">{a.name}</p>
                   <div className="mt-1.5 flex items-center gap-2">
                     <div className="h-1.5 w-24 overflow-hidden rounded-full bg-line" aria-hidden="true">
-                      <div className={`h-full rounded-full ${a.successRate < 96 ? 'bg-caution' : 'bg-brand'}`} style={{ width: `${a.successRate}%` }} />
+                      <div className={`h-full rounded-full ${a.successRate < 96 ? 'bg-caution' : 'bg-brand'}`} style={{ width: `${Number.isFinite(a.successRate)?a.successRate+'%':'\u2014'}` }} />
                     </div>
                     <span className="text-sm text-muted">
-                      {a.successRate}% · {a.runs24h.toLocaleString()} runs
+                      {a.successRate}% · {Number.isFinite(a.runs24h)?a.runs24h.toLocaleString():'\u2014'} runs
                     </span>
                   </div>
                 </div>
                 <Switch
-                checked={enabled[a.id]}
+                checked={a.enabled}
                 disabled={!permissions.manageProviders || !online}
-                onChange={(on) => {
-                  setEnabled((s) => ({ ...s, [a.id]: on }));
-                  toast(`${a.name} ${on ? 'enabled' : 'paused'}`);
-                }}
+                onChange={async(on)=>{try{await api('/v1/admin/ai/tasks/'+a.id,{auth:true,method:'PATCH',json:{is_enabled:on}});tasks.refresh();toast('Analyzer updated');}catch(error){toast.error(apiErrorMessage(error));}}}
                 label={`${a.name} enabled`} />
               
               </li>

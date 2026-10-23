@@ -16,7 +16,7 @@ export function useCheckFlow() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { online } = usePwa();
-  const { hasPermission } = useUser();
+  const { hasPermission, credits } = useUser();
   const option = getCheckType(type);
   const context: ResearchContext = type && ['business', 'phone', 'website', 'person', 'social', 'listing'].includes(type) ? type as ResearchContext : option.id;
   const initial = params.get('mode');
@@ -75,5 +75,5 @@ export function useCheckFlow() {
       } else setError(failure instanceof ApiError ? apiErrorMessage(failure) : failure instanceof Error ? failure.message : 'Could not submit this check.');
     } finally { inFlight.current = false; if (!abort.signal.aborted) setBusy(false); }
   };
-  return { option, context, mode, setMode, url, setUrl, text, setText, uploads, setUploads, confirmOpen, setConfirmOpen, busy, stage, error, uncertain, allowed, ready, online, summary, confirm };
+  return { credits, cost: Number.isFinite(credits) ? 1 : NaN, option, context, mode, setMode, url, setUrl, text, setText, uploads, setUploads, confirmOpen, setConfirmOpen, busy, stage, error, uncertain, allowed, ready, online, summary, confirm };
 }

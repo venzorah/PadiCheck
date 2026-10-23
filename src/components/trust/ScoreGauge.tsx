@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import { scoreBand } from '../../utils/trustScore';
 import type { ScoreBand } from '../../types/trust';
@@ -31,12 +30,12 @@ export function ScoreGauge({ score, size = 'lg', bands }: ScoreGaugeProps) {
           className={band.stroke}
           strokeDasharray={c}
           initial={{ strokeDashoffset: c }}
-          animate={{ strokeDashoffset: c - score / 100 * c }}
+          animate={{ strokeDashoffset: Number.isFinite(score)?c - score / 100 * c:c }}
           transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }} />
         
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center" aria-hidden="true">
-        <span className={`font-bold tabular-nums leading-none text-ink ${size === 'lg' ? 'text-5xl' : 'text-lg'}`}>{score}</span>
+        <span className={`font-bold tabular-nums leading-none text-ink ${size === 'lg' ? 'text-5xl' : 'text-lg'}`}>{Number.isFinite(score)?score:'—'}</span>
         {size === 'lg' && <span className="mt-1 text-sm text-muted">out of 100</span>}
       </div>
     </div>);

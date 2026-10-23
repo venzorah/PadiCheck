@@ -1,4 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import { api, apiErrorMessage } from '../../api/client';
+import { useApiData } from '../../hooks/useApiData';
+import { SubmissionEvidence } from '../../components/SubmissionEvidence';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { BadgeCheckIcon, CheckIcon, ExternalLinkIcon, FileTextIcon, SearchIcon, XIcon } from 'lucide-react';
@@ -11,9 +14,7 @@ import { StateView } from '../../components/trust/StateView';
 import { useAdminData } from '../../contexts/AdminDataContext';
 import { useAdminSession } from '../../contexts/AdminSessionContext';
 import { useTrust } from '../../contexts/TrustContext';
-import { MY_BUSINESS_ID } from '../../data/businesses';
 import { verificationStatusMeta } from '../../data/businessPortal';
-import { track } from '../../utils/analytics';
 import { formatDate, formatWhen } from '../../utils/checks';
 import type { Business, BusinessDocument, VerificationStatus } from '../../types/trust';
 
@@ -29,10 +30,11 @@ const tabMatch: Record<Tab, (s: VerificationStatus) => boolean> = {
 };
 
 export function AdminBusinesses() {
-  const { businesses, saveBusiness, reports, disputes, notify } = useTrust();
-  const { permissions, log, session } = useAdminSession();
+  const { businesses, reports, disputes } = useTrust();
+  const { permissions, session } = useAdminSession();
   const { audit } = useAdminData();
   const canAct = permissions.verifyBusinesses;
+  const verifications=useApiData<{verifications:Record<string,unknown>[]}>('/v1/admin/verifications?limit=100&offset=0');
   const [tab, setTab] = useState<Tab>('queue');
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -49,34 +51,15 @@ export function AdminBusinesses() {
 
   const count = (t: Tab) => businesses.filter((b) => tabMatch[t](b.verification) && b.verification !== 'none').length;
 
-  const apply = (b: Business, patch: Partial<Business>, actionText: string, notice?: {title: string;body: string;}) => {
-    saveBusiness({ ...b, ...patch });
-    log('trust', actionText, `${b.name} (${b.regNumber})`);
-    if (notice && b.id === MY_BUSINESS_ID) notify({ category: 'verification', ...notice, to: '/business/verification' });
+  const apply = async(b:Business,patch:Partial<Business>,actionText:string,_notice?:unknown)=>{
+    const request=verifications.data?.verifications.find(row=>row.business_profile_id===b.id);
+    if(!request){toast.error('No verification request is available for this business.');return;}
+    const status=patch.verification==='verified'?'approved':patch.verification==='rejected'?'rejected':patch.verification==='review'?'in_review':null;
+    if(!status){toast('This verification action is not supported by the backend.');return;}
+    try{await api('/v1/admin/verifications/'+request.verification_request_id+'/review',{auth:true,method:'POST',json:{status,note:patch.infoRequest||actionText}});verifications.refresh();window.dispatchEvent(new Event('padicheck-data-updated'));toast.success('Verification decision recorded');}catch(error){toast.error(apiErrorMessage(error));}
   };
-
-  const approve = (b: Business) => {
-    if (b.documents.some((d) => d.status === 'rejected')) {
-      toast.error('A document is marked rejected', { description: 'Accept every document or request new ones first.' });
-      return;
-    }
-    const now = new Date().toISOString();
-    const certificateId = b.certificateId ?? `PC-${b.tier === 'Basic Verification' ? 'BV' : 'VB'}-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900000) + 100000)}`;
-    apply(
-      b,
-      { verification: 'verified', verifiedAt: b.verifiedAt ?? now, lastVerifiedAt: now, certificateId, infoRequest: undefined, documents: b.documents.map((d) => ({ ...d, status: 'accepted' })), score: Math.max(b.score, 70) },
-      `Approved verification · ${b.tier}`,
-      { title: 'You’re PadiCheck Verified', body: `Your certificate ${certificateId} and QR code are ready.` }
-    );
-    track('business_verification_completed', { tier: b.tier });
-    toast.success(`${b.name} is now verified`);
-  };
-
-  const setDoc = (b: Business, doc: BusinessDocument, status: BusinessDocument['status']) => {
-    saveBusiness({ ...b, documents: b.documents.map((d) => d.kind === doc.kind ? { ...d, status } : d) });
-    log('trust', `Marked document ${status}`, `${b.name} · ${doc.kind}`);
-  };
-
+  const approve=(b:Business)=>void apply(b,{verification:'verified'},'Approved after evidence review.');
+  const setDoc=(_business?:Business,_doc?:BusinessDocument,_status?:BusinessDocument['status'])=>toast('Per-document decisions are not supported; review the whole request.');
   const history = open ? audit.filter((a) => a.category === 'trust' && a.detail?.includes(open.name)).slice(0, 8) : [];
   const bizReports = open ? reports.filter((r) => r.entityName === open.name) : [];
   const bizDisputes = open ? disputes.filter((d) => d.businessId === open.id) : [];
@@ -189,7 +172,7 @@ export function AdminBusinesses() {
             {open.infoRequest && <p className="rounded-2xl bg-caution-soft p-3 text-sm text-caution">Last message to business: {open.infoRequest}</p>}
 
             <section>
-              <h3 className="text-sm font-semibold text-ink">Documents</h3>
+              <h3 className="text-sm font-semibold text-ink">Documents</h3>{verifications.data?.verifications.find(row=>row.business_profile_id===open.id)&&<SubmissionEvidence kind="verifications" id={String(verifications.data.verifications.find(row=>row.business_profile_id===open.id)!.verification_request_id)}/>} 
               {open.documents.length === 0 ?
             <p className="mt-2 text-sm text-muted">No documents uploaded.</p> :
 
@@ -268,7 +251,7 @@ export function AdminBusinesses() {
         onConfirm={(reason) => {
           if (open) apply(open, { verification: 'info', infoRequest: reason }, 'Requested more information', { title: 'More information needed', body: reason });
           setAction(null);
-          toast.success('Request sent to the business');
+          
         }} />
       
       <ReasonSheet
@@ -281,7 +264,7 @@ export function AdminBusinesses() {
         onConfirm={(reason) => {
           if (open) apply(open, { verification: 'rejected', infoRequest: reason }, 'Rejected verification', { title: 'Verification not approved', body: reason });
           setAction(null);
-          toast('Verification rejected');
+          
         }} />
       
       <ReasonSheet
@@ -294,7 +277,7 @@ export function AdminBusinesses() {
         onConfirm={(reason) => {
           if (open) apply(open, { verification: 'suspended', infoRequest: reason }, 'Suspended verification', { title: 'Verification suspended', body: reason });
           setAction(null);
-          toast('Verification suspended');
+          
         }} />
       
       <ReasonSheet
@@ -308,7 +291,7 @@ export function AdminBusinesses() {
             apply(open, { verification: restored ? 'verified' : 'review', infoRequest: undefined, lastVerifiedAt: restored ? new Date().toISOString() : open.lastVerifiedAt }, restored ? `Restored verification — ${reason}` : `Reopened for review — ${reason}`, restored ? { title: 'Verification restored', body: 'Your badge and certificate are valid again.' } : undefined);
           }
           setAction(null);
-          toast.success('Done');
+          
         }} />
       
     </>);

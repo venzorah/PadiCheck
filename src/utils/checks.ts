@@ -41,11 +41,13 @@ export function formatBytes(bytes: number): string {
 
 export function formatWhen(iso: string): string {
   const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return '\u2014';
   if (isSameDay(date, new Date())) return `Today, ${format(date, 'HH:mm')}`;
   return format(date, 'd MMM, HH:mm');
 }
 
 export function formatDate(iso: string): string {
+  if (!Number.isFinite(new Date(iso).getTime())) return '\u2014';
   return format(new Date(iso), 'd MMM yyyy');
 }
 
@@ -56,6 +58,7 @@ export function formatDuration(seconds: number): string {
 }
 
 export function formatNaira(amount: number): string {
+  if (!Number.isFinite(amount)) return '\u2014';
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
 }
 

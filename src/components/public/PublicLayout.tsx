@@ -32,7 +32,7 @@ export function PublicLayout() {
     <div className="min-h-[100dvh] w-full bg-canvas">
       <header className="no-print sticky top-0 z-40 border-b border-line bg-canvas/95 pt-safe backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-2 px-4 lg:px-10">
-          <Link to="/welcome" aria-label="PadiCheck home" className="mr-4">
+          <Link to="/welcome" aria-label="PadiCheck home" className="min-w-0 shrink-0 sm:mr-4 [&>span]:max-sm:scale-[0.85] [&>span]:max-sm:origin-left max-sm:-mr-4">
             <Logo height={28} />
           </Link>
           <nav aria-label="Main" className="hidden flex-1 lg:block">
@@ -57,7 +57,7 @@ export function PublicLayout() {
                 Log in
               </Link>
             }
-            <Link to="/verify" className="inline-flex h-11 items-center rounded-xl bg-brand px-4 text-[15px] font-semibold text-white hover:bg-brand-dark">
+            <Link to="/verify" className="inline-flex h-11 shrink-0 items-center rounded-xl bg-brand px-3 text-sm min-[360px]:inline-flex max-[359px]:hidden sm:px-4 sm:text-[15px] font-semibold text-white hover:bg-brand-dark">
               Check Now
             </Link>
             <button type="button" aria-label="Open menu" onClick={() => setMenuOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl text-ink hover:bg-surface lg:hidden">

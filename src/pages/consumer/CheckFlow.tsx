@@ -1,57 +1,199 @@
-import { Link2Icon, PencilLineIcon, UploadIcon } from 'lucide-react';
-import { Link, useLocation, useParams } from 'react-router-dom';
-import { BottomSheet } from '../../components/BottomSheet';
-import { PageHeader } from '../../components/consumer/PageHeader';
+import { Link } from 'react-router-dom';
+import { CameraIcon, ClipboardPasteIcon, Link2Icon, PencilLineIcon, UploadIcon } from 'lucide-react';
+import { toast } from 'sonner';
+import { AnalysisProgress } from '../../components/check/AnalysisProgress';
+import { CameraCapture } from '../../components/check/CameraCapture';
+import { ConfirmCheckSheet } from '../../components/check/ConfirmCheckSheet';
 import { FileUpload } from '../../components/check/FileUpload';
-import { useCheckFlow } from '../../hooks/useCheckFlow';
+import { CreditPill } from '../../components/consumer/CreditPill';
+import { PageHeader } from '../../components/consumer/PageHeader';
 import { useUser } from '../../contexts/UserContext';
-import { investigationLabels } from '../../utils/investigations';
+import { useCheckFlow } from '../../hooks/useCheckFlow';
+import { domainOf, looksLikeUrl } from '../../utils/checks';
 import type { InputMode } from '../../types/check';
 
-const tabs = [{ id: 'link', label: 'Link', icon: Link2Icon }, { id: 'text', label: 'Describe', icon: PencilLineIcon }, { id: 'upload', label: 'Documents', icon: UploadIcon }] as const;
+const modeTabs: {id: InputMode;label: string;icon: typeof Link2Icon;}[] = [
+{ id: 'link', label: 'Link', icon: Link2Icon },
+{ id: 'text', label: 'Describe', icon: PencilLineIcon },
+{ id: 'camera', label: 'Camera', icon: CameraIcon },
+{ id: 'upload', label: 'Upload', icon: UploadIcon }];
+
+
 export function CheckFlow() {
-  const { type } = useParams();
-  const location = useLocation();
-  return <CheckFlowForm key={`${type}:${location.search}`} />;
-}
-function CheckFlowForm() {
   const flow = useCheckFlow();
   const { dataSaver } = useUser();
-  const input = 'mt-2 w-full rounded-2xl bg-surface p-4 text-base text-ink outline-none ring-1 ring-line focus:ring-2 focus:ring-brand';
-  const researchType = flow.context === 'phone' ? 'phone_lookup' : flow.context === 'business' ? 'company_research' : flow.option.id === 'contract' ? 'contract_review' : flow.mode === 'link' ? 'web_analysis' : 'general_research';
+  const { option } = flow;
+
+  if (flow.busy) {
+    return (
+      <>
+        <PageHeader back title="" />
+        <AnalysisProgress title={option.longLabel} stage={flow.stage} />
+      </>);
+
+  }
+
+  const pasteUrl = async () => {
+    try {
+      flow.setUrl((await navigator.clipboard.readText()).trim());
+    } catch {
+      toast('Tap and hold the field, then choose Paste');
+    }
+  };
+
+  const costLine =
+  <p className="text-sm text-muted">
+      Uses <strong className="font-semibold text-ink">{Number.isFinite(flow.cost)?flow.cost:'\u2014'} credit{flow.cost > 1 ? 's' : ''}</strong> · You have {Number.isFinite(flow.credits)?flow.credits:'\u2014'}
+    </p>;
+
+  const continueButton =
+  <button
+    type="button"
+    disabled={!flow.ready}
+    onClick={() => flow.setConfirmOpen(true)}
+    className="h-12 w-full rounded-2xl bg-brand font-semibold text-white transition-colors hover:bg-brand-dark disabled:bg-line disabled:text-muted">
+    
+      {flow.online ? 'Continue' : 'Needs connection'}
+    </button>;
+
+  const focusList =
+  <ul className="mt-3 space-y-2.5">
+      {option.focusAreas.map((area) =>
+    <li key={area} className="flex gap-2.5 text-[15px] text-ink">
+          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true" />
+          {area}
+        </li>
+    )}
+    </ul>;
+
+
   return (
     <>
-      <PageHeader back title={investigationLabels[researchType]} />
-      <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-10 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-12 lg:space-y-0 lg:px-10">
-        <section>
-          <div role="tablist" aria-label="Input type" className="flex gap-2">
-            {tabs.filter((tab) => flow.context === 'phone' ? tab.id === 'text' : flow.option.id !== 'contract' || tab.id === 'upload').map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={flow.mode === tab.id} disabled={flow.busy} onClick={() => flow.setMode(tab.id as InputMode)} className={`inline-flex h-11 items-center gap-2 rounded-full px-4 font-medium ${flow.mode === tab.id ? 'bg-ink text-white' : 'bg-surface text-ink ring-1 ring-line'}`}><tab.icon className="h-4 w-4" />{tab.label}</button>)}
+      <PageHeader back title={option.longLabel} actions={<CreditPill />} />
+      <div className="mx-auto w-full max-w-6xl px-4 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-12 lg:px-10">
+        <section aria-label="Add what you want to check">
+          <div role="tablist" aria-label="Input type" className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:px-0">
+            {modeTabs.map((tab) => {
+              const active = flow.mode === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => flow.setMode(tab.id)}
+                  className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-[15px] font-medium transition-colors ${
+                  active ? 'bg-ink text-white' : 'bg-surface text-ink ring-1 ring-line hover:bg-canvas'}`
+                  }>
+                  
+                  <tab.icon className="h-4 w-4" aria-hidden="true" />
+                  {tab.label}
+                </button>);
+
+            })}
           </div>
-          <fieldset disabled={flow.busy} className="mt-5">
-            {flow.mode === 'link' && <label className="block text-sm font-medium text-ink">Link to research<input type="url" maxLength={2048} value={flow.url} onChange={(e) => flow.setUrl(e.target.value)} placeholder="https://example.com" className={input} /></label>}
-            {(flow.mode === 'text' || flow.mode === 'link' || flow.mode === 'upload') && <label className="mt-4 block text-sm font-medium text-ink">{flow.mode === 'text' ? 'What would you like to research?' : 'Research instructions (optional)'}<textarea rows={5} maxLength={10000} value={flow.text} onChange={(e) => flow.setText(e.target.value)} className={input} placeholder="Describe the opportunity and the questions you want answered." /></label>}
-            {flow.mode === 'upload' && <div className="mt-4"><FileUpload items={flow.uploads} onChange={flow.setUploads} accept="application/pdf,.pdf" formats="PDF only, up to 10 MB per document; ten documents maximum" dataSaver={dataSaver} /><p className="mt-3 text-sm text-muted">Documents upload privately when you submit. Keep this page open until submission is confirmed.</p></div>}
-            {flow.mode === 'camera' && <p className="rounded-2xl bg-surface p-5 text-muted">Camera and image analysis are not available yet. Describe what you want researched or choose a PDF document above.</p>}
-          </fieldset>
-          {flow.context === 'phone' && <p className="mt-3 text-sm text-muted">Enter one phone number with its international country code, for example +2348012345678. Research does not guarantee the number owner's identity.</p>}
-          {!flow.allowed && <p role="alert" className="mt-4 text-sm text-danger">Your account does not have permission to create investigations.</p>}
-          {!flow.online && <p role="status" className="mt-4 text-sm text-muted">Reconnect to submit. Checks are not submitted automatically while offline.</p>}
-          {flow.error && <p role="alert" className="mt-4 rounded-2xl bg-danger-soft p-4 text-sm text-danger">{flow.error}</p>}
-          {flow.busy && <p role="status" className="mt-4 text-sm text-muted">{flow.stage}</p>}
-          {flow.error.includes('no investigation units') && <Link to="/account/billing" className="mt-4 inline-block font-semibold text-brand-dark">View billing offers</Link>}
-          {flow.uncertain && <Link to="/history" className="mt-4 inline-block font-semibold text-brand-dark">Check History</Link>}
+
+          <div className="mt-4" role="tabpanel">
+            {flow.error && <p role="alert" className="mb-4 rounded-2xl bg-danger-soft p-4 text-danger">{flow.error} <Link to="/history" className="underline">History</Link></p>}
+            {flow.mode === 'link' &&
+            <div>
+                <label htmlFor="check-url" className="text-sm font-medium text-ink">
+                  Link to the listing, post or offer
+                </label>
+                <div className="mt-2 flex items-center gap-2 rounded-2xl bg-surface p-1.5 ring-1 ring-line focus-within:ring-2 focus-within:ring-ink">
+                  <input
+                  id="check-url"
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  enterKeyHint="go"
+                  value={flow.url}
+                  onChange={(e) => flow.setUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && flow.ready && flow.setConfirmOpen(true)}
+                  placeholder="https://"
+                  className="h-12 min-w-0 flex-1 bg-transparent px-3 text-[17px] text-ink outline-none placeholder:text-muted/70" />
+                
+                  <button type="button" onClick={pasteUrl} className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl bg-canvas px-3 text-sm font-semibold text-ink hover:bg-line/60">
+                    <ClipboardPasteIcon className="h-4 w-4" aria-hidden="true" /> Paste
+                  </button>
+                </div>
+                {flow.url &&
+              <p className={`mt-2 text-sm ${looksLikeUrl(flow.url) ? 'text-brand-dark' : 'text-muted'}`}>
+                    {looksLikeUrl(flow.url) ? `We’ll check ${domainOf(flow.url)}` : 'That doesn’t look like a link yet'}
+                  </p>
+              }
+              </div>
+            }
+
+            {flow.mode === 'text' &&
+            <div>
+                <label htmlFor="check-text" className="text-sm font-medium text-ink">
+                  Describe the opportunity
+                </label>
+                <textarea
+                id="check-text"
+                value={flow.text}
+                onChange={(e) => flow.setText(e.target.value)}
+                rows={6}
+                placeholder="What is it, who’s offering it, the price or pay, and how you found it."
+                className="mt-2 block w-full resize-none rounded-2xl bg-surface p-4 text-[17px] leading-relaxed text-ink outline-none ring-1 ring-line placeholder:text-muted/70 focus:ring-2 focus:ring-ink" />
+              
+                <p className="mt-2 text-sm text-muted">More detail gives a more useful report. Your draft stays on this page.</p>
+              </div>
+            }
+
+            {flow.mode === 'camera' &&
+            <CameraCapture photo={null} onChange={() => toast('Camera analysis is not available yet. Use a link, description or PDF.')} onUse={() => undefined} dataSaver={dataSaver} />
+            }
+
+            {flow.mode === 'upload' &&
+            <FileUpload
+              items={flow.uploads}
+              onChange={flow.setUploads}
+              accept="application/pdf,.pdf"
+              formats={option.id === 'contract' ? 'PDF, DOCX or TXT up to 20 MB' : 'JPG, PNG, WEBP, PDF, DOCX or TXT · 20 MB max'}
+              dataSaver={dataSaver} />
+
+            }
+
+          </div>
+
+          <div className="mt-8 lg:hidden">
+            <h2 className="text-sm font-medium text-muted">What PadiCheck looks at</h2>
+            {focusList}
+          </div>
         </section>
-        <aside className="rounded-3xl bg-surface p-6">
-          <h2 className="font-semibold text-ink">{investigationLabels[researchType]}</h2>
-          <p className="mt-3 text-sm leading-relaxed text-muted">Research uses available sources and returns findings with evidence and limitations. It does not guarantee identity, registration, safety or authenticity.</p>
-          <p className="mt-4 text-sm text-muted">When billing is enabled, a new investigation uses one unit. The server confirms availability. Failed investigations can be retried without a new charge.</p>
-          <p className="mt-3 text-sm text-muted">Your draft is held only on this page and clears when you leave.</p>
-          <button type="button" disabled={!flow.ready} onClick={() => flow.setConfirmOpen(true)} className="mt-6 h-12 w-full rounded-2xl bg-brand font-semibold text-white disabled:opacity-50">Review and submit</button>
+
+        <aside className="hidden lg:block">
+          <div className="sticky top-8 rounded-3xl bg-surface p-6">
+            <h2 className="font-semibold text-ink">What PadiCheck looks at</h2>
+            {focusList}
+            <div className="mt-6 border-t border-line pt-5">
+              {costLine}
+              <div className="mt-4">{continueButton}</div>
+            </div>
+          </div>
         </aside>
       </div>
-      <BottomSheet open={flow.confirmOpen} onClose={() => flow.setConfirmOpen(false)} title="Submit this investigation?" footer={<button type="button" disabled={!flow.ready} onClick={() => void flow.confirm()} className="h-12 w-full rounded-2xl bg-brand font-semibold text-white disabled:opacity-50">Submit investigation</button>}>
-        <p className="break-words text-ink">{flow.summary}</p><p className="mt-4 text-sm text-muted">Processing may be queued or deferred. Availability of independent search and AI analysis depends on the configured services.</p>
-      </BottomSheet>
-    </>
-  );
+
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 backdrop-blur-md lg:hidden">
+        <div className="mx-auto flex max-w-xl items-center gap-4">
+          <div className="min-w-0 flex-1">{costLine}</div>
+          <div className="w-40 shrink-0">{continueButton}</div>
+        </div>
+      </div>
+
+      <ConfirmCheckSheet
+        open={flow.confirmOpen}
+        onClose={() => flow.setConfirmOpen(false)}
+        onConfirm={flow.confirm}
+        checkLabel={option.longLabel}
+        summary={flow.summary}
+        cost={flow.cost}
+        credits={flow.credits}
+        online={flow.online} />
+      
+    </>);
+
 }

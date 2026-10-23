@@ -1,6 +1,6 @@
 ﻿# PadiCheck frontend
 
-React, TypeScript and Vite frontend integrated against the backend's 21 October 2026 contract (115 OpenAPI operations).
+React, TypeScript and Vite frontend using the backend's 21 October 2026 API contract. The original PadiCheckV2 presentation has been restored; see [UI restoration and validation](docs/ui-restoration.md).
 
 ## Run locally
 
@@ -16,7 +16,7 @@ Production hosting must route SPA URLs to `index.html` and reverse-proxy `/v1` o
 
 ## Integration status
 
-Supported auth/MFA/sessions, investigations/private PDF evidence, bookmarks, in-app notifications, directory, incident reports/disputes/verification submissions, business teams/profile edits, API-key lifecycle, completed-investigation shares, authoritative billing and permission-based staff workflows are connected to APIs. Unsupported prototype controls explain their limitations.
+Supported auth/MFA/sessions, investigations/private PDF evidence, bookmarks, in-app notifications, directory, incident reports/disputes/verification submissions, business teams/profile edits, API-key lifecycle, completed-investigation shares, authoritative billing and selected permission-based staff workflows are connected to APIs. Unsupported prototype controls explain their limitations.
 
 Tokens and secrets stay in memory. Reload requires login. Recovery codes and API-key secrets have intentional one-time displays. Checkout return retains only the non-secret local checkout UUID; the backend determines payment and allowances.
 

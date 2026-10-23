@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { CloudOffIcon } from 'lucide-react';
 import { VerdictBadge } from './VerdictBadge';
@@ -34,7 +33,7 @@ export function ResultRow({ result }: {result: AnalysisResult;}) {
             }
           </span>
         </span>
-        <VerdictBadge verdict={result.verdict} />
+        <VerdictBadge verdict={result.verdict} label={result.status} />
       </Link>
     </li>);
 

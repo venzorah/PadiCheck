@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { KeyRoundIcon, LoaderCircleIcon, ShieldCheckIcon } from 'lucide-react';
 import { useAdminSession } from '../../contexts/AdminSessionContext';
+import { useUser } from '../../contexts/UserContext';
+import { apiErrorMessage } from '../../api/client';
 import { usePwa } from '../../contexts/PwaContext';
 
 export function AdminLogin() {
   const navigate = useNavigate();
   const { signIn } = useAdminSession();
+  const {session}=useUser();
   const { identity, online } = usePwa();
-  const [email, setEmail] = useState('tunde@padicheck.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -20,18 +23,12 @@ export function AdminLogin() {
       setError('You need a connection to sign in.');
       return;
     }
-    if (!email.endsWith('@padicheck.com')) {
-      setError('Use your @padicheck.com staff account.');
-      return;
-    }
     if (password.length < 8) {
       setError('Enter your password (at least 8 characters).');
       return;
     }
     setBusy(true);
-    await new Promise((r) => window.setTimeout(r, 800));
-    signIn(email);
-    navigate('/admin', { replace: true });
+    try {const accepted=await signIn(email,password);setPassword('');navigate(accepted?'/admin':'/mfa',{replace:true,state:{from:'/admin'}});}catch(error){setError(apiErrorMessage(error));}finally{setBusy(false);}
   };
 
   const input =
@@ -44,7 +41,7 @@ export function AdminLogin() {
         <h1 className="mt-6 text-2xl font-bold">PadiCheck Admin</h1>
         <p className="mt-1 text-navy-text">Sign in with your staff account.</p>
 
-        <form onSubmit={submit} className="mt-8 space-y-4" noValidate>
+        {session&&!session.roles.some(role=>['support','moderator','verifier','admin','superadmin'].includes(role))&&<p role="alert" className="mt-4 text-sm text-[#FFB4AE]">This account has no staff role. Sign in with an authorized account.</p>}<form onSubmit={submit} className="mt-8 space-y-4" noValidate>
           <label className="block">
             <span className="text-sm font-medium">Work email</span>
             <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className={input} />
@@ -66,14 +63,14 @@ export function AdminLogin() {
             {busy && <LoaderCircleIcon className="h-5 w-5 animate-spin" aria-hidden="true" />}
             Sign in
           </button>
-          <button type="button" className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl font-semibold text-white ring-1 ring-navy-line transition-colors hover:bg-navy-light">
+          <button type="button" disabled title="Company SSO is unavailable" className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl font-semibold text-white ring-1 ring-navy-line transition-colors hover:bg-navy-light">
             <KeyRoundIcon className="h-4 w-4" aria-hidden="true" /> Use company SSO
           </button>
         </form>
 
         <p className="mt-8 flex gap-2 text-sm text-navy-text">
           <ShieldCheckIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          Authorised staff only. Two-factor authentication is required, and sessions end after 12 hours of inactivity.
+          Authorised staff only. Enrolled accounts require two-factor authentication. Sessions expire after 15 minutes.
         </p>
       </div>
     </main>);

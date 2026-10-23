@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { WifiOffIcon } from 'lucide-react';
 import { BottomSheet } from '../BottomSheet';
@@ -22,15 +21,15 @@ export function ConfirmCheckSheet({ open, onClose, onConfirm, checkLabel, summar
     <BottomSheet
       open={open}
       onClose={onClose}
-      title={online ? 'Ready to check?' : 'Save for when you’re online?'}
+      title={online ? 'Ready to check?' : 'Connection needed'}
       footer={
       short && online ?
       <Link to="/credits" onClick={onClose} className={`${primaryClass} bg-ink text-white hover:bg-ink-soft`}>
             Get credits
           </Link> :
 
-      <button type="button" onClick={onConfirm} className={`${primaryClass} bg-brand text-white hover:bg-brand-dark`}>
-            {online ? `Analyze · ${cost} credit${cost > 1 ? 's' : ''}` : 'Add to queue'}
+      <button type="button" disabled={!online} onClick={onConfirm} className={`${primaryClass} bg-brand text-white hover:bg-brand-dark`}>
+            {online ? Number.isFinite(cost) ? `Analyze \u00b7 ${cost} credit${cost > 1 ? 's' : ''}` : 'Analyze' : 'Needs connection'}
           </button>
 
       }>
@@ -47,18 +46,18 @@ export function ConfirmCheckSheet({ open, onClose, onConfirm, checkLabel, summar
         <div className="flex justify-between gap-4 p-4">
           <dt className="text-muted">Cost</dt>
           <dd className="font-medium text-ink">
-            {cost} credit{cost > 1 ? 's' : ''}
+            {Number.isFinite(cost) ? `${cost} credit${cost > 1 ? 's' : ''}` : 'Confirmed by server'}
           </dd>
         </div>
         <div className="flex justify-between gap-4 p-4">
           <dt className="text-muted">Balance after</dt>
-          <dd className={`font-medium ${short ? 'text-danger' : 'text-ink'}`}>{short ? `You have ${credits}` : credits - cost}</dd>
+          <dd className={`font-medium ${short ? 'text-danger' : 'text-ink'}`}>{Number.isFinite(credits) ? short ? `You have ${credits}` : credits - cost : 'Not enforced while billing is disabled'}</dd>
         </div>
       </dl>
       {!online &&
       <p className="mt-4 flex gap-2 rounded-2xl bg-caution-soft p-4 text-sm text-caution">
           <WifiOffIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          You’re offline. We’ll keep this privately on your device and run it when you reconnect. Credits are only used when the check runs.
+          Reconnect to submit this check. Files have not been uploaded.
         </p>
       }
       {short && online && <p className="mt-4 text-sm text-danger">You need {cost - credits} more credit{cost - credits > 1 ? 's' : ''} for this check.</p>}

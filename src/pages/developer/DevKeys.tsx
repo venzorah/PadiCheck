@@ -1,8 +1,145 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Action, ApiState, SimpleForm, inputStyle, panelStyle } from '../../components/ApiUI';
+import { toast } from 'sonner';
+import { CopyIcon, KeyRoundIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
+import { BottomSheet } from '../../components/BottomSheet';
+import { ConfirmSheet } from '../../components/ConfirmSheet';
+import { Field } from '../../components/admin/Field';
+import { StateView } from '../../components/trust/StateView';
+import { useUser } from '../../contexts/UserContext';
 import { useApiData } from '../../hooks/useApiData';
-import { apiKeysApi, type ApiKeyRecord, type KeyScope } from '../../api/apiKeys';
-export function DevKeys() { const state = useApiData<{
-    api_keys: ApiKeyRecord[];
-}>('/v1/me/api-keys'); const [secret, setSecret] = useState<string | null>(null); return <div className="space-y-5"><h1 className="text-xl font-bold text-ink">API keys</h1><p className="text-sm text-muted">Keys are for server-to-server investigation access. Never put them in browser code. Creation and rotation require a verified, recent sign-in.</p><Link to="/signin" state={{ from: '/developers/keys' }} className="text-brand-dark">Sign in again for key management</Link>{secret && <section className={panelStyle}><h2 className="font-semibold text-ink">Save this secret now</h2><p className="text-sm text-muted">This key is shown once. Closing this screen discards it.</p><code className="block break-all text-ink">{secret}</code><button type="button" onClick={() => setSecret(null)} className="font-semibold text-brand-dark">I saved it — dismiss</button></section>}<section className={panelStyle}><SimpleForm label="Create key" submit={async (data) => { if (!data.getAll('scope').length) throw new Error('Choose at least one investigation scope.'); const result = await apiKeysApi.create(String(data.get('name')), data.getAll('scope') as KeyScope[], Number(data.get('days'))); setSecret(result.secret); state.refresh(); }}><label>Name<input name="name" required maxLength={80} className={inputStyle}/></label><label><input type="checkbox" name="scope" value="investigations:read" defaultChecked/> Read own investigations</label><label className="block"><input type="checkbox" name="scope" value="investigations:create"/> Create investigations</label><label>Expires in days<input name="days" type="number" min={1} max={90} defaultValue={30} required className={inputStyle}/></label></SimpleForm></section><ApiState {...state}/>{state.data?.api_keys.length === 0 && <p className="text-muted">No API keys.</p>}{state.data?.api_keys.map(row => <section key={row.api_key_id} className={panelStyle}><h2 className="font-semibold text-ink">{row.name}</h2><p className="font-mono text-sm text-muted">{row.key_prefix}…</p><p className="text-sm text-muted">{row.scopes.join(', ')} · Expires {new Date(row.expires_at).toLocaleString()} · {row.revoked_at ? 'Revoked' : 'Active'}</p>{!row.revoked_at && <div className="flex gap-3"><Action danger run={async () => { const result = await apiKeysApi.rotate(row.api_key_id); setSecret(result.secret); state.refresh(); }}>Rotate key</Action><Action danger run={() => apiKeysApi.revoke(row.api_key_id)} after={state.refresh}>Revoke key</Action></div>}</section>)}</div>; }
+import { apiKeysApi, type ApiKeyRecord } from '../../api/apiKeys';
+import { apiErrorMessage } from '../../api/client';
+import { ApiState } from '../../components/ApiUI';
+import { formatWhen } from '../../utils/checks';
+import { chipClass, inputClass, primaryButton } from '../../utils/formStyles';
+import type { ApiKey } from '../../types/trust';
+
+
+export function DevKeys() {
+  const {session}=useUser();
+  const state=useApiData<{api_keys:ApiKeyRecord[]}>('/v1/me/api-keys');
+  const apiKeys=(state.data?.api_keys||[]).map(row=>({id:row.api_key_id,name:row.name,prefix:row.key_prefix,env:'live' as const,createdAt:row.created_at,lastUsed:row.last_used_at||undefined,revoked:!!row.revoked_at}));
+  const [busy,setBusy]=useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [env, setEnv] = useState<ApiKey['env']>('live');
+  const [secret, setSecret] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<ApiKey | null>(null);
+  const liveAllowed = !!session?.emailVerified;
+
+  const create = async () => {
+    if(name.trim().length<2||busy||!liveAllowed)return;setBusy(true);
+    try {const response=await apiKeysApi.create(name.trim(),['investigations:read','investigations:create'],30);setSecret(response.secret);setName('');state.refresh();}catch(error){toast.error(apiErrorMessage(error));}finally{setBusy(false);}
+  };
+
+  return (
+    <div className="max-w-4xl"><ApiState loading={state.loading} error={state.error}/>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted">Keys are shown once. Store them in your server’s secrets, never in an app or website.</p>
+        <button type="button" onClick={() => setCreateOpen(true)} className={`${primaryButton} h-11 shrink-0 px-4`}>
+          <PlusIcon className="h-4 w-4" aria-hidden="true" /> New key
+        </button>
+      </div>
+      {apiKeys.length === 0 ?
+      <StateView kind="empty" className="mt-4" title="No API keys yet" /> :
+
+      <ul className="mt-4 divide-y divide-line overflow-hidden rounded-3xl bg-surface">
+          {apiKeys.map((k) =>
+        <li key={k.id} className={`flex flex-wrap items-center gap-3 px-5 py-4 ${k.revoked ? 'opacity-60' : ''}`}>
+              <KeyRoundIcon className="h-5 w-5 text-muted" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium text-ink">{k.name}</span>
+                <span className="block font-mono text-sm text-muted">{k.prefix}••••••••</span>
+              </span>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${k.env === 'live' ? 'bg-brand-soft text-brand-dark' : 'bg-amber-soft text-amber'}`}>{k.env === 'live' ? 'Live' : 'Sandbox'}</span>
+              <span className="w-full text-sm text-muted sm:w-40">{k.revoked ? 'Revoked' : k.lastUsed ? `Used ${formatWhen(k.lastUsed)}` : 'Never used'}</span>
+              {!k.revoked &&
+          <span className="flex gap-1"><button type="button" disabled={busy} onClick={async()=>{if(!window.confirm('Rotate this key and revoke the old secret?'))return;setBusy(true);try{const response=await apiKeysApi.rotate(k.id);setSecret(response.secret);setCreateOpen(true);state.refresh();}catch(error){toast.error(apiErrorMessage(error));}finally{setBusy(false);}}} className="h-11 rounded-xl px-3 text-sm font-semibold text-brand-dark hover:bg-canvas">Rotate</button><button type="button" onClick={() => setRevoking(k)} className="h-11 rounded-xl px-3 text-sm font-semibold text-danger hover:bg-danger-soft">
+                  Revoke
+                </button></span>
+          }
+            </li>
+        )}
+        </ul>
+      }
+
+      <BottomSheet
+        open={createOpen}
+        onClose={() => {
+          setCreateOpen(false);
+          setSecret(null);
+        }}
+        title={secret ? 'Copy your key now' : 'Create an API key'}
+        description={secret ? 'For your security we won’t show this again.' : undefined}
+        footer={
+        secret ?
+        <button
+          type="button"
+          onClick={() => {
+            setCreateOpen(false);
+            setSecret(null);
+          }}
+          className={`${primaryButton} w-full`}>
+          
+              I’ve stored it safely
+            </button> :
+
+        <button type="button" onClick={create} disabled={busy || name.trim().length < 2 || !liveAllowed} className={`${primaryButton} w-full`}>
+              Create key
+            </button>
+
+        }>
+        
+        {secret ?
+        <div>
+            <code className="block break-all rounded-2xl bg-canvas p-4 font-mono text-sm text-ink">{secret}</code>
+            <button
+            type="button"
+            onClick={async () => {
+              await navigator.clipboard?.writeText(secret);
+              toast.success('Key copied');
+            }}
+            className="mt-3 inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-brand-dark ring-1 ring-line">
+            
+              <CopyIcon className="h-4 w-4" aria-hidden="true" /> Copy
+            </button>
+          </div> :
+
+        <div className="space-y-4">
+            <Field label="Name" hint="So you know where it’s used, e.g. “Checkout server”">
+              <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+            </Field>
+            <fieldset>
+              <legend className="text-sm font-medium text-ink">Environment</legend>
+              <div className="mt-2 flex gap-2">
+                <button type="button" aria-pressed={env === 'sandbox'} disabled title="Sandbox keys are unavailable" onClick={() => setEnv('sandbox')} className={chipClass(env === 'sandbox')}>
+                  Sandbox
+                </button>
+                <button type="button" aria-pressed={env === 'live'} onClick={() => setEnv('live')} className={chipClass(env === 'live')}>
+                  Live
+                </button>
+              </div>
+            </fieldset>
+            {env === 'live' && !liveAllowed &&
+          <p className="flex gap-2 rounded-2xl bg-caution-soft p-3 text-sm text-caution">
+                <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> Keys require a verified account email and a recent sign-in. Sandbox keys are unavailable.
+              </p>
+          }
+          </div>
+        }
+      </BottomSheet>
+      <ConfirmSheet
+        open={revoking !== null}
+        onClose={() => setRevoking(null)}
+        onConfirm={async () => {
+          if(!revoking||busy)return;setBusy(true);
+          try {await apiKeysApi.revoke(revoking.id);state.refresh();toast('Key revoked');setRevoking(null);}catch(error){toast.error(apiErrorMessage(error));}finally{setBusy(false);}
+        }}
+        title={`Revoke “${revoking?.name}”?`}
+        description="Requests using this key will fail immediately with 401 Unauthorized. This can’t be undone."
+        confirmLabel="Revoke key"
+        tone="danger" />
+      
+    </div>);
+
+}

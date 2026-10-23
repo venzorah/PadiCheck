@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader } from '../../components/consumer/PageHeader';
 import { RichText } from '../../components/RichText';
@@ -9,7 +8,7 @@ export function Legal() {
   const { slug } = useParams<{slug: string;}>();
   const { getDoc } = usePlatform();
   const doc = slug ? getDoc(slug) : undefined;
-  const live = doc && doc.kind === 'legal' && doc.version > 0;
+  const live = doc && doc.kind !== 'copy' && doc.version > 0;
 
   return (
     <>

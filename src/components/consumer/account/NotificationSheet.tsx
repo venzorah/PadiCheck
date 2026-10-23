@@ -1,14 +1,63 @@
+import { useState } from 'react';
+import { BellIcon } from 'lucide-react';
 import { BottomSheet } from '../../BottomSheet';
-import { useApiData } from '../../../hooks/useApiData';
-import { notificationsApi, type NotificationKind } from '../../../api/notifications';
-import { Action, ApiState } from '../../ApiUI';
-const labels: Record<NotificationKind, string> = { 'investigation.completed': 'Completed investigations', 'investigation.failed': 'Failed investigations', 'business.invitation': 'Business invitations' };
-export function NotificationSheet({ open, onClose }: {
-    open: boolean;
-    onClose: () => void;
-}) { const state = useApiData<{
-    preferences: {
-        notification_type: NotificationKind;
-        enabled: boolean;
-    }[];
-}>(open ? '/v1/me/notification-preferences' : null); return <BottomSheet open={open} onClose={onClose} title="In-app notification preferences"><p className="mb-4 text-sm text-muted">Preferences affect future in-app events. Email and push are unavailable.</p><ApiState {...state}/>{state.data?.preferences.map(row => <div key={row.notification_type} className="flex items-center justify-between gap-3 border-b border-line py-3"><span className="text-ink">{labels[row.notification_type]}</span><Action run={() => notificationsApi.setPreference(row.notification_type, !row.enabled)} after={state.refresh}>{row.enabled ? 'Turn off' : 'Turn on'}</Action></div>)}</BottomSheet>; }
+import { Switch } from '../../Switch';
+import { usePwa } from '../../../contexts/PwaContext';
+import { useUser } from '../../../contexts/UserContext';
+import { notificationTypes } from '../../../data/preferences';
+
+type Permission = NotificationPermission | 'unsupported';
+
+function currentPermission(): Permission {
+  return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+}
+
+export function NotificationSheet({ open, onClose }: {open: boolean;onClose: () => void;}) {
+  const { notificationPrefs, setNotificationPref } = useUser();
+  const { platform, install } = usePwa();
+  const [permission] = useState<Permission>(currentPermission);
+  const iosNeedsInstall = platform === 'ios' && !install.installed;
+
+  const request = async () => {
+    return;
+  };
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Notifications" description="We only notify you about things you’ve asked us to.">
+      {permission !== 'granted' &&
+      <div className="mb-4 flex gap-3 rounded-2xl bg-canvas p-4">
+          <BellIcon className="mt-0.5 h-5 w-5 shrink-0 text-brand" aria-hidden="true" />
+          <div className="flex-1 text-sm">
+            {iosNeedsInstall || permission === 'unsupported' ?
+          <p className="text-ink">On iPhone and iPad, notifications work once PadiCheck is added to your Home Screen.</p> :
+          permission === 'denied' ?
+          <p className="text-ink">Notifications are blocked. Turn them on for PadiCheck in your browser or device settings.</p> :
+
+          <>
+                <p className="text-ink">Notifications appear inside PadiCheck. Push delivery is not available yet.</p>
+                <button type="button" disabled title="Push notifications are not supported yet" onClick={request} className="mt-3 h-11 rounded-xl bg-ink px-4 font-semibold text-white hover:bg-ink-soft">
+                  Allow notifications
+                </button>
+              </>
+          }
+          </div>
+        </div>
+      }
+      <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-canvas">
+        {notificationTypes.map((original) => {
+          const mapping:Record<string,string>={analysis:'investigation.completed',research:'investigation.failed',account:'business.invitation'};
+          const key=mapping[original.id];
+          const n=original.id==='research'?{...original,label:'Investigation failed',hint:'When a check could not complete'}:original.id==='account'?{...original,label:'Business invitations',hint:'Invitations to join a business team'}:original;
+          return (
+        <li key={n.id} className="flex items-center gap-3 py-2 pl-4 pr-2">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-ink">{n.label}</p>
+              <p className="text-sm text-muted">{n.hint}</p>
+            </div>
+            <Switch checked={notificationPrefs[key] ?? false} disabled={!key} onChange={(on) => setNotificationPref(key, on)} label={n.label} />
+          </li>
+        );})}
+      </ul>
+    </BottomSheet>);
+
+}

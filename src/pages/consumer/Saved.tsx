@@ -1,14 +1,50 @@
-import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { PageHeader } from '../../components/consumer/PageHeader';
-import { Action, ApiState, panelStyle } from '../../components/ApiUI';
 import { useApiData } from '../../hooks/useApiData';
-import { bookmarksApi, type Bookmark } from '../../api/bookmarks';
-import { statusLabels } from '../../utils/investigations';
+import type { Bookmark } from '../../api/bookmarks';
+import { investigationView } from '../../utils/presentationAdapters';
+import { BookmarkIcon } from 'lucide-react';
+import { PageHeader } from '../../components/consumer/PageHeader';
+import { ResultRow } from '../../components/consumer/ResultRow';
+import { useUser } from '../../contexts/UserContext';
+import { useOpenCheck } from '../../hooks/useOpenCheck';
+import { ApiState } from '../../components/ApiUI';
+
 export function Saved() {
-    const [offset, setOffset] = useState(0);
-    const list = useApiData<{
-        bookmarks: Bookmark[];
-    }>(`/v1/me/bookmarks?limit=20&offset=${offset}`);
-    return <><PageHeader title="Saved investigations"/><div className="mx-auto max-w-3xl space-y-4 px-4 pb-10"><ApiState {...list}/>{list.data?.bookmarks.length === 0 && <p className="text-muted">No saved investigations on this page.</p>}{list.data?.bookmarks.map(row => <section key={row.investigation_id} className={panelStyle}><Link to={`/result/${row.investigation_id}`} className="font-semibold text-brand-dark">{row.title || row.investigation_type}</Link><p className="text-sm text-muted">{statusLabels[row.status]} · Saved {new Date(row.bookmarked_at).toLocaleString()}</p><Action run={() => bookmarksApi.remove(row.investigation_id)} after={list.refresh}>Remove bookmark</Action></section>)}<div className="flex gap-4"><button disabled={!offset || list.loading} onClick={() => setOffset(Math.max(0, offset - 20))}>Previous</button><button disabled={list.loading || list.data?.bookmarks.length !== 20 || offset >= 10000} onClick={() => setOffset(offset + 20)}>Next</button></div><p className="text-xs text-muted">Bookmarks are private to your account. Reports require a connection.</p></div></>;
+  const [offset,setOffset]=useState(0);
+  const history=useApiData<{bookmarks:Bookmark[]}>('/v1/me/bookmarks?limit=20&offset='+offset);
+  const saved=(history.data?.bookmarks||[]).map(row=>investigationView({...row,user_id:'',created_at:row.bookmarked_at,updated_at:row.bookmarked_at,started_at:null,completed_at:null,error_code:null}));
+  useUser();
+  const openCheck = useOpenCheck();
+
+
+  return (
+    <>
+      <PageHeader title="Saved" />
+      <ApiState loading={history.loading} error={history.error}/>
+      <div className="mx-auto w-full max-w-3xl px-4 lg:px-10">
+        
+        {saved.length > 0 && <h2 className="mb-1 font-semibold text-ink">Saved reports</h2>}
+        {saved.length === 0 ?
+        <div className="mt-6 flex flex-col items-center rounded-3xl bg-surface px-6 py-12 text-center">
+            <BookmarkIcon className="h-8 w-8 text-muted" aria-hidden="true" />
+            <p className="mt-3 font-semibold text-ink">Nothing saved yet</p>
+            <p className="mt-1 max-w-xs text-sm text-muted">Save a report to keep it handy. Reconnect to open saved reports.</p>
+            <button type="button" onClick={openCheck} className="mt-5 h-12 rounded-2xl bg-ink px-6 font-semibold text-white hover:bg-ink-soft">
+              Start a check
+            </button>
+          </div> :
+
+        <>
+            <p className="text-sm text-muted">Saved reports are private to your account and need a connection.</p>
+            <ul className="mt-3 divide-y divide-line overflow-hidden rounded-3xl bg-surface">
+              {saved.map((r) =>
+            <ResultRow key={r.id} result={{ ...r, availableOffline: false }} />
+            )}
+            </ul>
+          </>
+        }
+        <div className="mt-4 flex justify-between text-sm font-semibold text-brand-dark"><button disabled={!offset||history.loading} onClick={()=>setOffset(value=>Math.max(0,value-20))}>Previous</button><button disabled={history.loading||history.data?.bookmarks.length!==20} onClick={()=>setOffset(value=>value+20)}>Next</button></div>
+      </div>
+    </>);
+
 }

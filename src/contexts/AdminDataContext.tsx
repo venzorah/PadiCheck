@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useMemo, type ReactNode } from 'react';
-import { usePersistentState } from '../hooks/usePersistentState';
-import { initialRoles, initialTeam } from '../data/adminRoles';
-import { initialAudit, initialCampaigns, initialDataSources, initialSettings, initialTemplates } from '../data/adminPlatform';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { useState } from 'react';
+import { initialSettings } from '../data/adminPlatform';
 import { makeId } from '../utils/checks';
 import type { AdminRoleDef, AdminSettings, AuditEntry, Campaign, DataSource, NotificationTemplate, TeamMember } from '../types/admin';
 
@@ -32,13 +31,13 @@ function upsert<T extends {id: string;}>(list: T[], item: T): T[] {
 }
 
 export function AdminDataProvider({ children }: {children: ReactNode;}) {
-  const [roles, setRoles] = usePersistentState('pc-admin-roles', initialRoles);
-  const [team, setTeam] = usePersistentState('pc-admin-team', initialTeam);
-  const [audit, setAudit] = usePersistentState('pc-admin-audit', initialAudit);
-  const [dataSources, setDataSources] = usePersistentState('pc-admin-sources', initialDataSources);
-  const [templates, setTemplates] = usePersistentState('pc-admin-templates', initialTemplates);
-  const [campaigns, setCampaigns] = usePersistentState('pc-admin-campaigns', initialCampaigns);
-  const [settings, setSettings] = usePersistentState('pc-admin-settings', initialSettings);
+  const [roles, setRoles] = useState<AdminRoleDef[]>([]);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [dataSources, setDataSources] = useState<DataSource[]>([]);
+  const [templates, setTemplates] = useState<NotificationTemplate[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [settings, setSettings] = useState(initialSettings);
 
   const value = useMemo<AdminDataValue>(
     () => ({

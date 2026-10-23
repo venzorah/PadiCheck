@@ -31,6 +31,7 @@ const toneStyles: Record<BandTone, Omit<BandMeta, 'label' | 'tone' | 'risk'>> = 
 const tones: BandTone[] = ['trusted', 'good', 'caution', 'warning', 'risk'];
 
 export function scoreBand(score: number, bands: ScoreBand[] = defaultBands): BandMeta {
+  if(!Number.isFinite(score))return {label:'Not available',tone:'caution',risk:'Medium risk',text:'text-muted',soft:'bg-canvas text-muted',stroke:'stroke-line'};
   const sorted = [...bands].sort((a, b) => b.min - a.min);
   const index = Math.max(0, sorted.findIndex((b) => score >= b.min));
   const tone = tones[Math.min(index, tones.length - 1)];

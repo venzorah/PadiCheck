@@ -1,9 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LoaderCircleIcon } from 'lucide-react';
 import { AuthShell, authInput } from '../../components/auth/AuthShell';
 import { useUser } from '../../contexts/UserContext';
 import { apiErrorMessage } from '../../api/client';
+import { GoogleSignIn } from '../../components/auth/GoogleSignIn';
+import { loginDestination } from '../../utils/authFlow';
 
 const strength = (p: string) => [p.length >= 12, /[A-Z]/.test(p), /\d/.test(p), /[^A-Za-z0-9]/.test(p)].filter(Boolean).length;
 const strengthLabel = ['Too weak', 'Weak', 'Fair', 'Good', 'Strong'];
@@ -11,27 +13,31 @@ const strengthTone = ['bg-danger', 'bg-danger', 'bg-amber', 'bg-teal', 'bg-brand
 
 export function SignUp() {
   const navigate = useNavigate();
-  const { startSignup } = useUser();
+  const location = useLocation();
+  const { startSignup, signInWithGoogle } = useUser();
   const submitting = useRef(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone,setPhone]=useState('');
   const [password, setPassword] = useState('');
   const [agree, setAgree] = useState(false);
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [serverError, setServerError] = useState('');
   const s = strength(password);
 
   const errors = {
     name: !name.trim() || name.trim().length > 120 ? 'Enter a display name of up to 120 characters' : '',
     email: !/^\S+@\S+\.\S+$/.test(email.trim()) || email.trim().length > 254 ? 'Enter a valid email address' : '',
+    phone: '',
     password: password.length < 12 || password.length > 128 ? 'Use between 12 and 128 characters' : '',
     agree: !agree ? 'You need to accept the terms to continue' : ''
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting.current) return;
+    if (submitting.current || googleBusy) return;
     setTried(true);
     setServerError('');
     if (Object.values(errors).some(Boolean)) return;
@@ -53,10 +59,10 @@ export function SignUp() {
   null;
 
   return (
-    <AuthShell title="Create your account" subtitle="Verify your email to finish creating your account.">
+    <AuthShell title="Create your account" subtitle="Free to start. Your first checks are on us.">
       <form onSubmit={submit} noValidate className="space-y-4">
         <label className="block">
-          <span className="text-sm font-medium text-ink">Display name</span>
+          <span className="text-sm font-medium text-ink">Full name</span>
           <input autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={tried && Boolean(errors.name)} className={authInput} />
           {err('name')}
         </label>
@@ -64,6 +70,13 @@ export function SignUp() {
           <span className="text-sm font-medium text-ink">Email</span>
           <input type="email" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={tried && Boolean(errors.email)} className={authInput} />
           {err('email')}
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-ink">
+            Phone <span className="font-normal text-muted">(optional, for account recovery)</span>
+          </span>
+          <input disabled title="Phone signup is not supported by the backend yet" type="tel" autoComplete="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} aria-invalid={tried && Boolean(errors.phone)} className={authInput} />
+          {err('phone')}
         </label>
         <label className="block">
           <span className="text-sm font-medium text-ink">Password</span>
@@ -81,7 +94,7 @@ export function SignUp() {
           {err('password')}
         </label>
         <label className="flex gap-3">
-          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[rgb(var(--brand))]" />
+          <input type="checkbox" checked={agree} disabled={busy || googleBusy} onChange={(e) => setAgree(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[rgb(var(--brand))]" />
           <span className="text-sm text-ink-soft">
             I agree to the{' '}
             <Link to="/legal/terms" className="font-semibold text-brand-dark underline">
@@ -99,10 +112,21 @@ export function SignUp() {
             {serverError}
           </p>
         }
-        <button type="submit" disabled={busy} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand font-semibold text-white hover:bg-brand-dark disabled:opacity-70">
+        <button type="submit" disabled={busy || googleBusy} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand font-semibold text-white hover:bg-brand-dark disabled:opacity-70">
           {busy && <LoaderCircleIcon className="h-5 w-5 animate-spin" aria-hidden="true" />} Create account
         </button>
       </form>
+      <div className="my-6 flex items-center gap-3 text-sm text-muted">
+        <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
+      </div>
+      <GoogleSignIn action="login" disabled={!agree || busy} onBusyChange={setGoogleBusy} onCredential={async credential => {
+        setServerError('');
+        setPassword('');
+        const complete = await signInWithGoogle(credential);
+        const from = (location.state as {from?: string} | null)?.from;
+        navigate(loginDestination(complete, from), {replace: true, state: {from}});
+      }} />
+      {!agree && <p className="mt-2 text-sm text-muted">Accept the Terms and Privacy Policy above to continue with Google.</p>}
       <p className="mt-6 text-center text-sm text-muted">
         Already have an account?{' '}
         <Link to="/signin" className="font-semibold text-brand-dark">

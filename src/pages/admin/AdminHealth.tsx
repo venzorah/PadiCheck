@@ -1,15 +1,16 @@
-import React from 'react';
 import { CircleCheckIcon, TriangleAlertIcon } from 'lucide-react';
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader';
 import { StatusPill } from '../../components/admin/StatusPill';
 import { usePwa } from '../../contexts/PwaContext';
 import { appIdentities } from '../../data/appIdentity';
-import { services } from '../../data/adminOps';
+import { useServiceReadiness } from '../../hooks/useAdminPresentation';
+import { ApiState } from '../../components/ApiUI';
 import { readInstallEvents } from '../../utils/installTracking';
 
 const workerLabels = { registering: 'Starting', active: 'Active', unavailable: 'Not registered in this preview', unsupported: 'Not supported by this browser' };
 
 export function AdminHealth() {
+  const readiness=useServiceReadiness();const services=readiness.services;
   const { sw, platform, browser, install, online } = usePwa();
   const issues = services.filter((s) => s.status !== 'operational');
   const events = readInstallEvents();
@@ -23,15 +24,15 @@ export function AdminHealth() {
     <>
       <AdminPageHeader title="System Health" subtitle="Services, providers and app delivery." />
       <div className="grid gap-5 px-4 md:px-8 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="space-y-5">
+        <div className="space-y-5"><ApiState loading={readiness.loading} error={readiness.error}/>
           <section
             role="status"
             className={`flex items-center gap-3 rounded-3xl p-5 ${issues.length ? 'bg-caution-soft text-caution' : 'bg-brand-soft text-brand-dark'}`}>
             
             {issues.length ? <TriangleAlertIcon className="h-6 w-6 shrink-0" aria-hidden="true" /> : <CircleCheckIcon className="h-6 w-6 shrink-0" aria-hidden="true" />}
             <div>
-              <p className="text-lg font-semibold">{issues.length ? `${issues.length} service degraded` : 'All systems operational'}</p>
-              <p className="text-sm">{issues.length ? issues.map((i) => i.detail).join(' · ') : 'No incidents in the last 24 hours.'}</p>
+              <p className="text-lg font-semibold">{issues.length ? `${issues.length} service degraded` : 'Services configured'}</p>
+              <p className="text-sm">{issues.length ? issues.map((i) => i.detail).join(' · ') : 'Configuration does not prove worker liveness or provider delivery.'}</p>
             </div>
           </section>
           <section aria-labelledby="services-heading" className="rounded-3xl bg-surface p-2">

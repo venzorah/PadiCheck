@@ -1,32 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckIcon, LoaderCircleIcon } from 'lucide-react';
 
-const steps = [
-'Understanding your opportunity...',
-'Checking available information...',
-'Comparing relevant data...',
-'Identifying risks...',
-'Preparing your report...'];
 
 
-export function AnalysisProgress({ title, onDone }: {title: string;onDone: () => void;}) {
-  const [step, setStep] = useState(0);
-  const doneRef = useRef(onDone);
-  doneRef.current = onDone;
-
-  useEffect(() => {
-    if (step >= steps.length) {
-      doneRef.current();
-      return;
-    }
-    const t = window.setTimeout(() => setStep((s) => s + 1), 1100);
-    return () => window.clearTimeout(t);
-  }, [step]);
-
+export function AnalysisProgress({ title, stage = 'Submitting investigation...' }: {title: string;stage?: string;onDone?: () => void;}) {
+  const step = 0;
+  const steps = [stage, 'Checking available information...', 'Comparing relevant data...', 'Identifying risks...', 'Preparing your report...'];
   return (
     <section className="mx-auto flex min-h-[70dvh] w-full max-w-md flex-col justify-center px-6" aria-live="polite">
-      <p className="text-sm font-medium text-brand-dark">Analyzing</p>
+      <p className="text-sm font-medium text-brand-dark">Processing</p>
       <h1 className="mt-1 text-2xl font-bold leading-tight text-ink">{title}</h1>
       <ol className="mt-8 space-y-4">
         {steps.map((label, i) => {

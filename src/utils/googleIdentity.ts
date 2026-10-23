@@ -45,6 +45,9 @@ export function googleErrorMessage(error: unknown): string {
     if (error.code === 'account_link_required') return 'This email already has a password account. Sign in with your password, then link Google in Security & privacy.';
     if (error.code === 'email_verification_required') return 'Create an account and verify your email before signing in with Google.';
     if (error.code === 'google_auth_unavailable') return 'Google sign-in is currently unavailable. Please use email and password.';
+    if (error.code === 'invalid_google_challenge') return 'Google sign-in expired or was already used. Please try again to start a fresh sign-in.';
+    if (error.code === 'verified_email_required') return 'Link the Google account with the same email as your verified PadiCheck account.';
+    if (error.code === 'google_identity_linked') return 'This Google account is already linked to another PadiCheck account.';
     return apiErrorMessage(error);
   }
   return error instanceof Error ? error.message : 'Google sign-in could not complete. Please try again.';

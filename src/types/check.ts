@@ -10,6 +10,7 @@ export interface ResultSection {
 }
 
 export interface AnalysisResult {
+  status?: string;
   id: string;
   type: Exclude<CheckType, 'any'>;
   categoryLabel: string;

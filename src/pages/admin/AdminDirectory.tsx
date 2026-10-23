@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import { useUser } from '../../contexts/UserContext';
+import { api, apiErrorMessage } from '../../api/client';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ExternalLinkIcon, SearchIcon } from 'lucide-react';
@@ -12,9 +14,8 @@ import { useAdminSession } from '../../contexts/AdminSessionContext';
 import { useTrust } from '../../contexts/TrustContext';
 import { DIRECTORY_FEE } from '../../data/directory';
 import { MY_BUSINESS_ID } from '../../data/businesses';
-import { track } from '../../utils/analytics';
 import { formatDate, formatNaira, formatWhen } from '../../utils/checks';
-import { isListed, YEAR_MS } from '../../utils/directory';
+import { isListed } from '../../utils/directory';
 import type { Business } from '../../types/trust';
 
 type Tab = 'pending' | 'live' | 'expiring' | 'closed';
@@ -24,9 +25,10 @@ const DAY = 86_400_000;
 
 /** Moderation queue for paid directory listings (₦6,000 / year). */
 export function AdminDirectory() {
-  const { businesses, saveBusiness, notify } = useTrust();
-  const { permissions, log } = useAdminSession();
-  const canAct = permissions.verifyBusinesses;
+  const { businesses, notify } = useTrust();
+  const { log } = useAdminSession();
+  const {hasPermission}=useUser();
+  const canAct = hasPermission('directory.manage');
   const [tab, setTab] = useState<Tab>('pending');
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -54,15 +56,8 @@ export function AdminDirectory() {
     if (b.id === MY_BUSINESS_ID) notify({ category: 'verification', title, body, to: '/business/listing' });
   };
 
-  const approve = (b: Business) => {
-    const now = new Date().toISOString();
-    saveBusiness({ ...b, directory: { ...b.directory!, status: 'active', approvedAt: now, expiresAt: new Date(Date.now() + YEAR_MS).toISOString(), note: undefined } });
-    log('trust', 'Approved directory listing', `${b.name} · ${b.category}`);
-    tell(b, 'Your listing is live', `${b.name} now appears in Explore Businesses under ${b.category}.`);
-    track('directory_listing_approved', { category: b.category });
-    toast.success(`${b.name} is live in the directory`);
-  };
-
+  const publication=async(b:Business,status:'published'|'hidden',reason:string)=>{try{await api('/v1/admin/businesses/'+b.id+'/publication',{auth:true,method:'POST',json:{status,note:reason}});window.dispatchEvent(new Event('padicheck-data-updated'));toast('Publication updated');}catch(error){toast.error(apiErrorMessage(error));}};
+  const approve=(b:Business)=>void publication(b,'published','Published after listing review.');
   const count = (t: Tab) => withListing.filter((b) => match(b, t)).length;
 
   return (
@@ -173,10 +168,10 @@ export function AdminDirectory() {
         <button
           type="button"
           onClick={() => {
-            saveBusiness({ ...open, directory: { ...open.directory!, status: 'active', note: undefined } });
+            void publication(open,'published','Publication restored.');
             log('trust', 'Restored directory listing', open.name);
             tell(open, 'Listing restored', `${open.name} is visible again.`);
-            toast.success('Listing restored');
+            
           }}
           className="h-12 w-full rounded-2xl bg-brand font-semibold text-white">
           
@@ -224,17 +219,8 @@ export function AdminDirectory() {
         description={action === 'reject' ? `The owner is told why and refunded ${formatNaira(DIRECTORY_FEE)}.` : 'The listing is hidden from Explore Businesses until restored.'}
         confirmLabel={action === 'reject' ? 'Reject and refund' : 'Suspend'}
         tone="danger"
-        onConfirm={(reason) => {
-          if (open) {
-            const status = action === 'reject' ? 'rejected' : 'suspended';
-            saveBusiness({ ...open, directory: { ...open.directory!, status, note: reason } });
-            log('trust', action === 'reject' ? 'Rejected directory listing (refund issued)' : 'Suspended directory listing', `${open.name} — ${reason}`);
-            tell(open, action === 'reject' ? 'Listing not approved' : 'Listing suspended', reason);
-            toast(action === 'reject' ? 'Listing rejected and refunded' : 'Listing suspended');
-          }
-          setAction(null);
-          setOpenId(null);
-        }} />
+        onConfirm={(reason)=>{if(open)void publication(open,'hidden',reason);setAction(null);}}
+ />
       
     </>);
 
