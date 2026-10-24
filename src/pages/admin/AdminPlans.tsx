@@ -15,18 +15,21 @@ import {apiErrorMessage} from '../../api/client';
 import {inputClass,primaryButton,textareaClass} from '../../utils/formStyles';
 import {formatNaira} from '../../utils/checks';
 import {planDraft} from '../../utils/planDraft';
+import {generatePlanKey} from '../../utils/planKey';
 
 const blank:PlanInput={plan_key:'',audience:'consumer',display_name:'',tagline:'',currency:'NGN',monthly_amount:'0.00',yearly_amount:'0.00',monthly_credits:0,yearly_credits:0,features:[],is_popular:false,is_published:false};
 export function AdminPlans(){
  const {session}=useUser();const allowed=Boolean(session?.roles.includes('superadmin'));const navigate=useNavigate();const location=useLocation();
  const data=useApiData<{plans:BillingPlan[]}>(allowed?'/v1/admin/billing/plans?limit=100':null);
  const [form,setForm]=useState<PlanInput|null>(null);const [editing,setEditing]=useState<BillingPlan|null>(null);const [benefits,setBenefits]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [enable,setEnable]=useState<BillingPlan|null>(null);
- useEffect(()=>{if(location.pathname.endsWith('/new')){const template=planDraft(new URLSearchParams(location.search).get('template'));setEditing(null);setForm(template??{...blank});setBenefits(template?.features.join('\n')??'');setError('');}},[location.pathname,location.search]);
+ const [autoKey,setAutoKey]=useState(true);
+ useEffect(()=>{if(location.pathname.endsWith('/new')){const template=planDraft(new URLSearchParams(location.search).get('template'));setEditing(null);setAutoKey(true);setForm(template??{...blank});setBenefits(template?.features.join('\n')??'');setError('');}},[location.pathname,location.search]);
+ const planKey=form?(!editing&&autoKey?generatePlanKey(form.display_name,data.data?.plans.map(plan=>plan.plan_key)):form.plan_key):'';
  const close=()=>{if(busy)return;setForm(null);setError('');if(location.pathname.endsWith('/new'))navigate('/admin/plans',{replace:true});};
  const field=<K extends keyof PlanInput>(key:K,value:PlanInput[K])=>setForm(current=>current?{...current,[key]:value}:null);
  const save=async()=>{if(!form||busy)return;setBusy(true);setError('');try{
  const validMoney=(value:string)=>/^\d+(\.\d{1,2})?$/.test(value)&&Number.isFinite(Number(value));if(!validMoney(form.monthly_amount)||!validMoney(form.yearly_amount))throw Error('Use valid naira amounts with at most two decimal places');
- const value={...form,display_name:form.display_name.trim(),monthly_amount:Number(form.monthly_amount).toFixed(2),yearly_amount:Number(form.yearly_amount).toFixed(2),features:benefits.split('\n').map(v=>v.trim()).filter(Boolean)};
+ const value={...form,plan_key:planKey,display_name:form.display_name.trim(),monthly_amount:Number(form.monthly_amount).toFixed(2),yearly_amount:Number(form.yearly_amount).toFixed(2),features:benefits.split('\n').map(v=>v.trim()).filter(Boolean)};
  if(editing)await plansApi.save(editing,value);else await plansApi.create(value);
  setForm(null);navigate('/admin/plans',{replace:true});data.refresh();toast.success('Plan saved');
  }catch(failure){setError(apiErrorMessage(failure));}finally{setBusy(false);}};
@@ -43,7 +46,9 @@ export function AdminPlans(){
  {(plan.monthly_available||plan.yearly_available)&&<p className="mt-3 text-xs text-muted">One-time period passes. Renew manually.</p>}
  </li>)}</ul>{!data.loading&&!data.error&&!data.data?.plans.length&&<p className="text-muted">No plans yet. Create your first plan.</p>}</div>
  <BottomSheet open={Boolean(form)} onClose={close} title={editing?'Edit plan':'Create plan'} footer={<button disabled={busy} onClick={()=>void save()} className={`${primaryButton} w-full`}>{busy?'Saving...':'Save plan'}</button>}>
- {form&&<div className="space-y-4"><Field label="Plan name"><input value={form.display_name} onChange={e=>field('display_name',e.target.value)} className={inputClass} maxLength={100}/></Field><Field label="Plan key" hint="Unique lowercase identifier, for example plus"><input disabled={Boolean(editing)} value={form.plan_key} onChange={e=>field('plan_key',e.target.value)} className={inputClass}/></Field>
+ {form&&<div className="space-y-4"><Field label="Plan name"><input value={form.display_name} onChange={e=>field('display_name',e.target.value)} className={inputClass} maxLength={100}/></Field>
+ {!editing&&<label className="flex items-center justify-between gap-3"><span className="text-ink">Generate plan key automatically</span><Switch checked={autoKey} disabled={busy} onChange={value=>{if(!value)field('plan_key',planKey);setAutoKey(value);}} label="Generate plan key automatically"/></label>}
+ <Field label="Plan key" hint={editing?'The saved plan key stays fixed.':autoKey?'Generated from the plan name. Turn off automatic generation to enter your own.':'Use lowercase letters, numbers, hyphens or underscores.'}><input disabled={Boolean(editing)||autoKey||busy} value={planKey} onChange={e=>field('plan_key',e.target.value)} className={inputClass} maxLength={50} placeholder={autoKey?'Enter a plan name first':'e.g. plus'}/></Field>
  <Field label="For"><select value={form.audience} onChange={e=>field('audience',e.target.value as PlanInput['audience'])} className={inputClass}><option value="consumer">Individuals</option><option value="business">Businesses</option></select></Field>
  <Field label="Tagline"><input value={form.tagline} onChange={e=>field('tagline',e.target.value)} className={inputClass} maxLength={200}/></Field>
  <div className="grid grid-cols-2 gap-3">{(['monthly','yearly'] as const).map(period=><div className="space-y-3" key={period}><Field label={`${period==='monthly'?'Monthly':'Yearly'} price (₦)`}><input type="number" min={0} step="0.01" value={form[`${period}_amount`]} onChange={e=>field(`${period}_amount`,e.target.value)} className={inputClass}/></Field><Field label={`${period==='monthly'?'Monthly':'Yearly'} credits`}><input type="number" min={0} step={1} value={form[`${period}_credits`]} onChange={e=>field(`${period}_credits`,Number(e.target.value))} className={inputClass}/></Field></div>)}</div>

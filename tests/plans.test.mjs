@@ -6,6 +6,7 @@ const encode=source=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModu
 const clientUrl=encode((await readFile(new URL('../src/api/client.ts',import.meta.url),'utf8')).replace('import.meta.env.VITE_API_BASE_URL',"''"));const client=await import(clientUrl);
 const {plansApi}=await import(encode((await readFile(new URL('../src/api/plans.ts',import.meta.url),'utf8')).replace("'./client'",JSON.stringify(clientUrl))));
 const {adminReturnPath}=await import(encode(await readFile(new URL('../src/utils/adminReturnPath.ts',import.meta.url),'utf8')));
+const {generatePlanKey}=await import(encode(await readFile(new URL('../src/utils/planKey.ts',import.meta.url),'utf8')));
 const originalPlansUrl=encode(await readFile(new URL('../src/data/plans.ts',import.meta.url),'utf8'));
 const {planDraft}=await import(encode((await readFile(new URL('../src/utils/planDraft.ts',import.meta.url),'utf8')).replace("'../data/plans'",JSON.stringify(originalPlansUrl))));
 const originalFetch=globalThis.fetch;
@@ -24,4 +25,12 @@ test('admin plan-creation links survive login without accepting outside redirect
 });
 test('the optional Plus template is an unsaved naira draft with the original price and admin-controlled highlight',()=>{
  const draft=planDraft('plus');assert.equal(draft.currency,'NGN');assert.equal(draft.monthly_amount,'2500.00');assert.equal(draft.monthly_credits,30);assert.equal(draft.is_popular,true);assert.equal(draft.is_published,false);assert.equal(planDraft('unknown'),null);
+});
+test('automatic plan keys match API rules and avoid existing keys within the catalog',()=>{
+ assert.equal(generatePlanKey('Plus Premium'),'plus-premium');
+ assert.equal(generatePlanKey('  Café & Renters!  '),'cafe-renters');
+ assert.equal(generatePlanKey('Plus',['plus','plus-2']),'plus-3');
+ assert.equal(generatePlanKey('   '),'');
+ const longName='Long plan '.repeat(20);const first=generatePlanKey(longName);const second=generatePlanKey(longName,[first]);
+ assert.ok(second.length<=50);assert.notEqual(first,second);assert.match(second,/^[a-z0-9_-]{1,50}$/);
 });

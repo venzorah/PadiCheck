@@ -6,6 +6,8 @@
 
 The existing admin shell and public card styles are retained. The plan form saves name, tagline, monthly/yearly naira price, credit allowance, audience, benefit descriptions, published state and the admin-selected **Most popular** badge. Only one published plan per audience/environment can have that badge. Revisions prevent stale edits; mutations are audited. Only superadmins can manage plans.
 
+New plans default to **Generate plan key automatically**. The key follows the plan name, normalizes spaces/punctuation and accents, stays within the API's 50-character limit, and adds a numeric suffix when an existing loaded catalog key matches. Turn the option off to enter a custom key. Existing saved keys remain fixed; database uniqueness is still authoritative if concurrent admins choose the same key.
+
 All plan amounts are **NGN**. Allowances are **credits**, since each check type may cost a different amount. Benefits are descriptions: saving text does not activate unavailable PDF exports, alerts, verification badges, automatic feature restrictions, or any other unfinished feature.
 
 ## Naira payment mode
