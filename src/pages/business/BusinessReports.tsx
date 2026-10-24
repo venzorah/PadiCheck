@@ -1,3 +1,4 @@
+import { SubmissionEvidence } from '../../components/SubmissionEvidence';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { PaperclipIcon, ScaleIcon, SendIcon } from 'lucide-react';
@@ -12,6 +13,9 @@ import { chipClass, inputClass, primaryButton, textareaClass } from '../../utils
 import type { Dispute, DisputeStatus, UserReport } from '../../types/trust';
 
 export const disputeStatusMeta: Record<DisputeStatus, {label: string;tone: string;}> = {
+  resolved: { label: 'Resolved', tone: 'bg-brand-soft text-brand-dark' },
+  rejected: { label: 'Rejected', tone: 'bg-danger-soft text-danger' },
+  withdrawn: { label: 'Withdrawn', tone: 'bg-canvas text-muted' },
   open: { label: 'Submitted', tone: 'bg-canvas text-muted' },
   review: { label: 'Under review', tone: 'bg-sky-soft text-sky' },
   info: { label: 'Information requested', tone: 'bg-caution-soft text-caution' },
@@ -31,8 +35,8 @@ export function BusinessReports() {
   const [tried, setTried] = useState(false);
   const [threadReply, setThreadReply] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
-  const myReports = reports.filter((r) => r.entityName === myBusiness.name);
-  const myDisputes = disputes.filter((d) => d.businessId === myBusiness.id);
+  const myReports = reports.filter((r) => Boolean(myBusiness.entityId) && r.entityId === myBusiness.entityId);
+  const myDisputes = disputes.filter((d) => Boolean(myBusiness.id) && (d.businessId === myBusiness.id || myReports.some(r => r.id === d.reportId)));
   const disputeFor = (reportId: string) => myDisputes.find((d) => d.reportId === reportId);
 
   const submitDispute = async () => {
@@ -98,7 +102,7 @@ export function BusinessReports() {
 
         <ul className="mt-3 space-y-3">
             {myDisputes.map((d) => {
-            const closed = ['upheld', 'corrected', 'removed'].includes(d.status);
+            const closed = ['upheld', 'corrected', 'removed', 'resolved', 'rejected', 'withdrawn'].includes(d.status);
             return (
               <li key={d.id} className="rounded-3xl bg-surface p-5">
                   <div className="flex flex-wrap items-center gap-2">
@@ -108,6 +112,8 @@ export function BusinessReports() {
                       {requestLabels[d.request]} · report {d.reportId}
                     </span>
                   </div>
+                  <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{d.statement}</p>
+                  <SubmissionEvidence kind="disputes" id={d.id} allowWithdraw/>
                   <ol className="mt-4 space-y-3">
                     {d.messages.map((m, i) =>
                   <li key={i} className={`max-w-[90%] rounded-2xl p-3 text-sm ${m.from === 'admin' ? 'bg-sky-soft text-ink' : 'ml-auto bg-canvas text-ink'}`}>

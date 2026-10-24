@@ -15,6 +15,8 @@ async function handle(event){const path=new URL(event.request.url).pathname;cons
  if(path==='/v1/auth/login'){loginCount++;return reply(event.requestId,200,loginCount===1?{mfa_required:true,challenge_token:'fixture-challenge',expires_in:300}:session('user-B'));}
  if(path==='/v1/auth/mfa/verify'){if(auth)throw new Error('Public factor exchange sent bearer auth');mfaAttempts++;return body.code==='012345'?reply(event.requestId,200,session('user-A')):reply(event.requestId,401,{error:{code:'invalid_mfa_code',message:'Invalid second factor'}});}
  if(path==='/v1/auth/me'){meCount++;return reply(event.requestId,200,{user:user(id)});}
+ if(path==='/v1/me/account')return reply(event.requestId,200,{providers:['password']});
+ if(path==='/v1/me/businesses')return reply(event.requestId,200,{businesses:[]});
  if(path==='/v1/directory')return reply(event.requestId,200,{businesses:[]});
  if(path==='/v1/reports')return reply(event.requestId,200,{reports:[]});
  if(path==='/v1/disputes')return reply(event.requestId,200,{disputes:[]});

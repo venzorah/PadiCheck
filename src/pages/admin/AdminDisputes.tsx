@@ -20,7 +20,7 @@ type Tab = 'active' | 'info' | 'decided' | 'all';
 type Decision = 'upheld' | 'corrected' | 'removed' | null;
 
 const requestLabels = { correction: 'Correct the information', removal: 'Remove the report', review: 'Review again' };
-const closedStates: DisputeStatus[] = ['upheld', 'corrected', 'removed'];
+const closedStates: DisputeStatus[] = ['upheld', 'corrected', 'removed', 'resolved', 'rejected', 'withdrawn'];
 
 const decisionCopy: Record<Exclude<Decision, null>, {title: string;description: string;confirm: string;tone?: 'danger';}> = {
   upheld: { title: 'Uphold the original report', description: 'The report and any warning stay in place. The business is told why.', confirm: 'Uphold report' },

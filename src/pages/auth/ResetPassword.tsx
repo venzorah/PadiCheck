@@ -1,23 +1,27 @@
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { CircleCheckIcon, LinkIcon, LoaderCircleIcon } from 'lucide-react';
+import { authApi } from '../../api/auth';
+import { apiErrorMessage } from '../../api/client';
+import { useUser } from '../../contexts/UserContext';
 import { AuthShell, authInput } from '../../components/auth/AuthShell';
 
 export function ResetPassword() {
-  const [params] = useSearchParams();
-  const token = params.get('token') ?? '';
-  const tokenState = !token ? 'invalid' : token.includes('expired') ? 'expired' : 'valid';
+  const location=useLocation();const {clearSession}=useUser();
+  const pending=location.state as {email?:string;challenge_id?:string;expiresAt?:number}|null;
+  const tokenState=!pending?.email||!pending.challenge_id?'invalid':Date.now()>Number(pending.expiresAt||0)?'expired':'valid';
+  const [code,setCode]=useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
-  const [state] = useState<'idle' | 'saving' | 'done'>('idle');
+  const [state,setState] = useState<'idle' | 'saving' | 'done'>('idle');
 
   if (tokenState !== 'valid') {
     return (
-      <AuthShell title={tokenState === 'expired' ? 'This link has expired' : 'This link isn’t valid'} subtitle="Reset links work once and expire after 30 minutes.">
+      <AuthShell title={tokenState === 'expired' ? 'This code has expired' : 'Request a reset code first'} subtitle="Reset codes work once and expire after 10 minutes.">
         <LinkIcon className="h-10 w-10 text-muted" aria-hidden="true" />
         <Link to="/forgot-password" className="mt-6 flex h-12 items-center justify-center rounded-2xl bg-brand font-semibold text-white">
-          Send a new link
+          Request a new code
         </Link>
       </AuthShell>);
 
@@ -43,12 +47,17 @@ export function ResetPassword() {
         noValidate
         onSubmit={async (e) => {
           e.preventDefault();
-          if (password.length < 8 || !/\d/.test(password) || !/[A-Z]/.test(password)) return setError('Use 8+ characters with a capital letter and a number');
+          if(state==='saving')return;
+          if(!/^\d{6}$/.test(code))return setError('Enter the six-digit reset code from your email');
+          if(password.length<12||password.length>128)return setError('Use between 12 and 128 characters');
           if (password !== confirm) return setError('The passwords don’t match');
-          setError('Password reset is not available from the backend yet.');
+          setError('');setState('saving');
+          try{await authApi.confirmPasswordReset({email:pending!.email!,challenge_id:pending!.challenge_id!,code,new_password:password});setCode('');setPassword('');setConfirm('');clearSession();setState('done');}
+          catch(error){setError(apiErrorMessage(error));setState('idle');}
         }}
         className="space-y-4">
         
+        <label className="block"><span className="text-sm font-medium text-ink">Reset code</span><input value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,''))} maxLength={6} inputMode="numeric" autoComplete="one-time-code" className={authInput}/></label>
         <label className="block">
           <span className="text-sm font-medium text-ink">New password</span>
           <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={authInput} />

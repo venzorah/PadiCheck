@@ -1,3 +1,4 @@
+import { SubmissionEvidence } from '../../components/SubmissionEvidence';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -74,6 +75,7 @@ export function BusinessVerification() {
           <h2 className="mt-3 text-2xl font-bold text-ink">We’re reviewing your documents</h2>
           <p className="mt-1 text-ink-soft">Submitted {b.submittedAt ? formatDate(b.submittedAt) : 'today'}. Most reviews finish within 2 working days — we’ll notify you.</p>
         </div>
+        {current&&<SubmissionEvidence kind="verifications" id={String(current.verification_request_id)} allowWithdraw onWithdraw={verification.refresh}/>}
         <ul className="divide-y divide-line rounded-3xl bg-surface">
           {b.documents.map((d) =>
           <li key={d.kind} className="flex items-center gap-3 px-5 py-4">

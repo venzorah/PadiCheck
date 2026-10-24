@@ -5,7 +5,7 @@ export interface GoogleIdentity {
     client_id: string; nonce: string; auto_select: boolean; ux_mode: 'popup';
     callback: (response: { credential?: string }) => void;
   }) => void;
-  renderButton: (element: HTMLElement, options: { type: 'standard'; theme: 'outline'; size: 'large'; text: 'continue_with'; width: number }) => void;
+  renderButton: (element: HTMLElement, options: { type: 'standard'; theme: 'outline'; size: 'large'; text: 'continue_with' | 'signup_with'; width: number }) => void;
   cancel: () => void;
   disableAutoSelect: () => void;
 }

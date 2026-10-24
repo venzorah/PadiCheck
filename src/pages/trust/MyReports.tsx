@@ -11,6 +11,7 @@ import { chipClass } from '../../utils/formStyles';
 import type { ReportStatus } from '../../types/trust';
 
 export const reportStatusMeta: Record<ReportStatus, {label: string;tone: string;}> = {
+  withdrawn: { label: 'Withdrawn', tone: 'bg-canvas text-muted' },
   pending: { label: 'Pending', tone: 'bg-canvas text-muted' },
   review: { label: 'Under Review', tone: 'bg-sky-soft text-sky' },
   info: { label: 'More Information Required', tone: 'bg-caution-soft text-caution' },
@@ -39,7 +40,7 @@ export function MyReports() {
       
       <div className="mx-auto w-full max-w-3xl px-4 lg:px-10">
         <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-          {(['all', 'pending', 'review', 'info', 'resolved', 'rejected'] as const).map((s) =>
+          {(['all', 'pending', 'review', 'info', 'resolved', 'rejected', 'withdrawn'] as const).map((s) =>
           <button key={s} type="button" aria-pressed={filter === s} onClick={() => setFilter(s)} className={chipClass(filter === s)}>
               {s === 'all' ? `All (${mine.length})` : reportStatusMeta[s].label}
             </button>
@@ -66,7 +67,7 @@ export function MyReports() {
                   {expanded &&
                 <div className="border-t border-line px-5 pb-5 pt-4">
                       <p className="whitespace-pre-line text-[15px] text-ink-soft">{r.description}</p>
-                      <SubmissionEvidence kind="reports" id={r.id}/>
+                      <SubmissionEvidence kind="reports" id={r.id} allowWithdraw/>
                       <ol className="mt-4 space-y-3 border-l-2 border-line pl-4">
                         {r.updates.map((u, i) =>
                     <li key={i}>

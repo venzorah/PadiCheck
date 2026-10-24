@@ -11,6 +11,7 @@ export interface RecoveryResult {
     enabled?: boolean;
 }
 export const securityApi = {
+    changePassword:(current_password:string,new_password:string)=>api<{changed:boolean;sign_in_required:boolean}>('/v1/auth/password/change',{auth:true,method:'POST',json:{current_password,new_password}}),
     sessions: (signal?: AbortSignal) => api<{
         sessions: SessionRecord[];
     }>('/v1/auth/sessions', { auth: true, signal }),

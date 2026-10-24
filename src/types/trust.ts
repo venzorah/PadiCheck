@@ -48,7 +48,7 @@ export interface TrustEntity {
   businessSlug?: string;
 }
 
-export type ReportStatus = 'pending' | 'review' | 'resolved' | 'rejected' | 'info';
+export type ReportStatus = 'pending' | 'review' | 'resolved' | 'rejected' | 'info' | 'withdrawn';
 
 export interface ReportUpdate {
   at: string;
@@ -75,7 +75,7 @@ export interface UserReport {
   updates: ReportUpdate[];
 }
 
-export type DisputeStatus = 'open' | 'review' | 'info' | 'upheld' | 'corrected' | 'removed';
+export type DisputeStatus = 'open' | 'review' | 'info' | 'upheld' | 'corrected' | 'removed' | 'resolved' | 'rejected' | 'withdrawn';
 
 export interface DisputeMessage {
   from: 'business' | 'admin';

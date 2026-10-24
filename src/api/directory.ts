@@ -1,5 +1,8 @@
 import { api } from './client';
 export interface PublicBusiness {
+    profile_status?:'draft'|'published'|'hidden';
+    member_role?:'owner'|'manager'|'editor'|'viewer';
+    profile_details?:{opening_hours?:string|null};
     business_profile_id: string;
     entity_id: string;
     canonical_name: string;

@@ -24,15 +24,16 @@ export function Security() {
   const sessionData=useApiData<Awaited<ReturnType<typeof securityApi.sessions>>>('/v1/auth/sessions');
   const factor=useApiData<Awaited<ReturnType<typeof securityApi.status>>>('/v1/auth/mfa');
   const sessions=(sessionData.data?.sessions||[]).map(row=>({id:row.session_id,device:row.is_current?'Current session':'Other session',place:'Signed in',lastSeen:row.authenticated_at,current:row.is_current}));
+  const account=useApiData<{providers:string[]}>('/v1/me/account');
   const twoFactor=factor.data?.enabled||false;const loginAlerts=false;
   const privacy={shareAnonStats:false,showNameOnReviews:false,personalisedTips:false};
   const unavailable=()=>toast('This feature is not available from the backend yet.');
   const setLoginAlerts=unavailable;  const [sheet,setSheet]=useState<null|'password'|'2fa'|'disable2fa'|'google'|'recovery'>(null);
   const [step,setStep]=useState<'scan'|'codes'>('scan');const [code,setCode]=useState('');const [codeError,setCodeError]=useState('');
   const [setup,setSetup]=useState<Awaited<ReturnType<typeof securityApi.setup>>|null>(null);
-  const [pw,setPw]=useState({current:'',next:'',confirm:''});const pwError='Password changes are not available yet.';
+  const [pw,setPw]=useState({current:'',next:'',confirm:''});const [pwError,setPwError]=useState('');
   const [busy,setBusy]=useState(false);const backupCodes:string[]=[];
-  const changePassword=unavailable;const exportData=unavailable;
+  const changePassword=async()=>{if(busy)return;setPwError('');if(pw.next.length<12||pw.next.length>128){setPwError('Use between 12 and 128 characters');return;}if(pw.next!==pw.confirm){setPwError('Passwords do not match');return;}setBusy(true);try{await securityApi.changePassword(pw.current,pw.next);setPw({current:'',next:'',confirm:''});completeSecurity();navigate('/security-complete',{replace:true});}catch(error){setPwError(apiErrorMessage(error));}finally{setBusy(false);}};const exportData=unavailable;
   const finish=(result:RecoveryResult)=>{setSetup(null);completeSecurity(result.recovery_codes);navigate('/security-complete',{replace:true});};
   useEffect(()=>{if(!setup)return;const timer=setTimeout(()=>{setSetup(null);setSheet(null);},setup.expires_in*1000);return()=>clearTimeout(timer);},[setup]);
   const startSetup=async()=>{if(busy)return;setBusy(true);setCode('');setCodeError('');try{setSetup(await securityApi.setup());setStep('scan');setSheet('2fa');}catch(error){toast.error(apiErrorMessage(error));}finally{setBusy(false);}};
@@ -157,7 +158,7 @@ export function Security() {
           </h2>
           <ul className="divide-y divide-line overflow-hidden rounded-3xl bg-surface">
             {(['google', 'apple'] as const).map((p) => {
-              const linked = session?.provider === p;
+              const linked = account.data?account.data.providers.includes(p):session?.provider===p;
               return (
                 <li key={p} className={row}>
                   <span className="flex-1 font-medium capitalize text-ink">{p}</span>
@@ -177,7 +178,7 @@ export function Security() {
         onClose={() => setSheet(null)}
         title="Change password"
         footer={
-        <button type="button" onClick={changePassword} disabled className={`${primaryButton} w-full`}>
+        <button type="button" onClick={()=>void changePassword()} disabled={busy} className={`${primaryButton} w-full`}>
             {busy && <LoaderCircleIcon className="h-5 w-5 animate-spin" aria-hidden="true" />} Update password
           </button>
         }>
@@ -245,7 +246,7 @@ export function Security() {
 
 
       <BottomSheet open={sheet==='disable2fa'||sheet==='recovery'} onClose={()=>setSheet(null)} title={sheet==='recovery'?'Regenerate recovery codes':'Turn off two-factor authentication?'} description="Enter an authenticator or recovery code. This signs out all sessions." footer={<button type="button" disabled={busy} className={primaryButton+' w-full'} onClick={async()=>{if(busy)return;setBusy(true);setCodeError('');try{finish(await(sheet==='recovery'?securityApi.regenerate(code.trim().toLowerCase()):securityApi.disable(code.trim().toLowerCase())));}catch(error){setCodeError(apiErrorMessage(error));}finally{setBusy(false);}}}>Confirm</button>}><input value={code} onChange={event=>setCode(event.target.value)} autoComplete="one-time-code" aria-label="Authenticator or recovery code" className={inputClass}/>{codeError&&<p role="alert" className="mt-3 text-sm text-danger">{codeError}</p>}</BottomSheet>
-      <BottomSheet open={sheet==='google'} onClose={()=>setSheet(null)} title="Connect Google"><GoogleSignIn action="link" disabled={!session?.emailVerified} onCredential={async credential=>{await authApi.linkGoogle(credential);setSheet(null);toast.success('Google account linked');}}/></BottomSheet>
+      <BottomSheet open={sheet==='google'} onClose={()=>setSheet(null)} title="Connect Google"><GoogleSignIn action="link" disabled={!session?.emailVerified} onCredential={async credential=>{await authApi.linkGoogle(credential);account.refresh();setSheet(null);toast.success('Google account linked');}}/></BottomSheet>
     </>);
 
 }

@@ -10,7 +10,7 @@ React, TypeScript and Vite frontend using the backend's 21 October 2026 API cont
 
 Vite proxies `/v1`, `/health` and `/ready`. Defaults need no environment file. Copy `.env.example` to `.env.local` to override `API_PROXY_TARGET`. Leave `VITE_API_BASE_URL` empty for same-origin requests. Never put backend secrets in `VITE_*` variables.
 
-For Google, set the public `VITE_GOOGLE_CLIENT_ID` to match the backend client ID. Authorized JavaScript origins must include the exact frontend origin and port. Readiness configuration flags do not establish Google consent, mailbox delivery or worker liveness.
+See [Google login and signup](docs/google-auth.md) for setup, account-linking behavior and validation. For Google, set the public `VITE_GOOGLE_CLIENT_ID` to match the backend client ID. Authorized JavaScript origins must include the exact frontend origin and port. Readiness configuration flags do not establish Google consent, mailbox delivery or worker liveness.
 
 Production hosting must route SPA URLs to `index.html` and reverse-proxy `/v1` over HTTPS. Vite's proxy is development-only. The backend has no cross-origin browser CORS contract. The build emits `/sw.js` and `/admin/sw.js`; private API responses and signed downloads remain network-only.
 

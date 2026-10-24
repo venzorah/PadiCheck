@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { BookmarkCheckIcon, BookmarkIcon, CircleCheckIcon, CloudOffIcon, CopyIcon, LinkIcon, MessageCircleIcon, Share2Icon } from 'lucide-react';
+import { ShareLinkManager } from '../../components/ShareLinkManager';
 import { BottomSheet } from '../../components/BottomSheet';
 import { PageHeader } from '../../components/consumer/PageHeader';
 import { VerdictBadge } from '../../components/consumer/VerdictBadge';
@@ -39,6 +40,7 @@ export function Result() {
   const sources=useEvidenceRows<InvestigationSource>(id||'', 'sources');
   useEffect(()=>{if(detail.data?.investigation.status==='completed'){findings.refresh();sources.refresh();}},[detail.data?.investigation.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const result = detail.data ? {...investigationView(detail.data.investigation), sections:findings.rows.map(row=>({label:row.verification_status,verdict:'caution' as const,headline:row.title,detail:row.explanation})),toCheck:detail.data.limitations} : null;
+  const [manageShares,setManageShares]=useState(false);
   const [shareUrl,setShareUrl]=useState('');
   const [saving,setSaving]=useState(false);
   const { online, install } = usePwa();
@@ -216,6 +218,7 @@ export function Result() {
             </ul>
           </section>
 
+          {detail.data?.investigation.user_id===session?.id&&<button type="button" onClick={()=>setManageShares(true)} className="inline-flex h-11 items-center rounded-xl px-4 text-sm font-semibold text-brand-dark ring-1 ring-line">Manage shared links</button>}
           <section className="space-y-3"><h2 className="text-lg font-semibold text-ink">Sources</h2>{sources.rows.map(source=><div key={source.source_id} className="rounded-3xl bg-surface p-4"><p className="font-semibold text-ink">{source.title||source.publisher||'Source'}</p><p className="mt-1 text-sm text-muted">{source.excerpt}</p>{safeHttpUrl(source.url)&&<a href={safeHttpUrl(source.url)!} target="_blank" rel="noopener noreferrer" className="text-sm text-brand-dark">Open source</a>}{source.media_id&&<PrivateMediaLink id={source.media_id}/>}</div>)}{sources.more&&<button disabled={sources.loading} onClick={sources.loadMore} className="h-11 rounded-xl px-4 text-sm font-semibold text-brand-dark ring-1 ring-line">More sources</button>}</section>
           {isNew && <InstallCard context="Get notified when reports are ready and open PadiCheck straight from your home screen." />}
         </div>
@@ -225,6 +228,7 @@ export function Result() {
         <div className="mx-auto grid max-w-xl grid-cols-2 gap-3">{actionButtons}</div>
       </div>
 
+      <ShareLinkManager id={result.id} open={manageShares} onClose={()=>setManageShares(false)}/>
       <BottomSheet open={shareOpen} onClose={() => {setShareOpen(false);setShareUrl('');}} title="Share this report">
         <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-canvas">
           {typeof navigator.share === 'function' &&

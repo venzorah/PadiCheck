@@ -17,7 +17,7 @@ for(const viewport of [{width:1440,height:1000,mobile:false},{width:390,height:8
   }finally{await page.call('Page.close');page.disconnect();}
  }
  const [reference,restored]=measurements;const match=JSON.stringify(reference)===JSON.stringify(restored);
- results.push({viewport:viewport.width,route,reference,restored,layoutMatch:match,expectedResponsiveDifference:route==='/welcome'&&viewport.width<640});console.log(JSON.stringify(results.at(-1)));
+ results.push({viewport:viewport.width,route,reference,restored,layoutMatch:match,expectedResponsiveDifference:route==='/welcome'&&viewport.width<640,expectedGoogleSignupDifference:route==='/signup'});console.log(JSON.stringify(results.at(-1)));
 }
 fs.writeFileSync('.tmp/ui-parity/layout-results.json',JSON.stringify(results,null,2));
-process.exitCode=results.every(row=>row.layoutMatch||row.expectedResponsiveDifference)?0:1;
+process.exitCode=results.every(row=>row.layoutMatch||row.expectedResponsiveDifference||row.expectedGoogleSignupDifference)?0:1;

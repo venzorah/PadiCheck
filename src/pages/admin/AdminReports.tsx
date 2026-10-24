@@ -42,7 +42,7 @@ export function AdminReports() {
   const open = reports.find((r) => r.id === openId) ?? null;
 
   const match = (r: UserReport, t: Tab) =>
-  t === 'open' ? r.status === 'pending' || r.status === 'review' && !r.escalated : t === 'info' ? r.status === 'info' : t === 'escalated' ? Boolean(r.escalated) && r.status === 'review' : t === 'closed' ? r.status === 'resolved' || r.status === 'rejected' : true;
+  t === 'open' ? r.status === 'pending' || r.status === 'review' && !r.escalated : t === 'info' ? r.status === 'info' : t === 'escalated' ? Boolean(r.escalated) && r.status === 'review' : t === 'closed' ? r.status === 'resolved' || r.status === 'rejected' || r.status === 'withdrawn' : true;
 
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -59,7 +59,7 @@ export function AdminReports() {
   const toggleFlag = () => {toast('Report flags are not supported by the backend yet.');};
 
   const count = (t: Tab) => reports.filter((r) => match(r, t)).length;
-  const closed = open && (open.status === 'resolved' || open.status === 'rejected');
+  const closed = open && (open.status === 'resolved' || open.status === 'rejected' || open.status === 'withdrawn');
 
   return (
     <>

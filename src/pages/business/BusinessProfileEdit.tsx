@@ -33,10 +33,10 @@ export function BusinessProfileEdit() {
         
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Business name" error={tried ? errors.name : undefined}>
-            <input readOnly aria-description="This field is not editable through the current API" value={form.name} onChange={(e) => set('name', e.target.value)} className={inputClass} />
+            <input value={form.name} onChange={(e) => set('name', e.target.value)} className={inputClass} />
           </Field>
           <Field label="Registration number" hint="CAC RC or BN number">
-            <input readOnly aria-description="This field is not editable through the current API" value={form.regNumber} onChange={(e) => set('regNumber', e.target.value)} className={inputClass} />
+            <input value={form.regNumber} onChange={(e) => set('regNumber', e.target.value)} className={inputClass} />
           </Field>
         </div>
         <fieldset>
@@ -53,17 +53,17 @@ export function BusinessProfileEdit() {
           <textarea rows={3} maxLength={280} value={form.description} onChange={(e) => set('description', e.target.value)} className={textareaClass} />
         </Field>
         <Field label="Address">
-          <input readOnly aria-description="This field is not editable through the current API" value={form.location} onChange={(e) => set('location', e.target.value)} className={inputClass} />
+          <input value={form.location} onChange={(e) => set('location', e.target.value)} className={inputClass} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Website" error={tried ? errors.website : undefined}>
-            <input readOnly aria-description="This field is not editable through the current API" value={form.website} onChange={(e) => set('website', e.target.value)} inputMode="url" className={inputClass} />
+            <input value={form.website} onChange={(e) => set('website', e.target.value)} inputMode="url" className={inputClass} />
           </Field>
           <Field label="Phone" error={tried ? errors.phone : undefined}>
-            <input readOnly aria-description="This field is not editable through the current API" value={form.phone} onChange={(e) => set('phone', e.target.value)} inputMode="tel" className={inputClass} />
+            <input value={form.phone} onChange={(e) => set('phone', e.target.value)} inputMode="tel" className={inputClass} />
           </Field>
           <Field label="Email" error={tried ? errors.email : undefined}>
-            <input readOnly aria-description="This field is not editable through the current API" value={form.email} onChange={(e) => set('email', e.target.value)} type="email" className={inputClass} />
+            <input value={form.email} onChange={(e) => set('email', e.target.value)} type="email" className={inputClass} />
           </Field>
         </div>
         <Field label="Social links" hint="One per line">

@@ -2,18 +2,18 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckIcon, CircleCheckIcon, ClockIcon, StoreIcon } from 'lucide-react';
 import { Field } from '../../components/admin/Field';
-import { CheckoutSheet } from '../../components/billing/CheckoutSheet';
+import { api, apiErrorMessage } from '../../api/client';
 import { StateView } from '../../components/trust/StateView';
 import { useTrust } from '../../contexts/TrustContext';
 import { useUser } from '../../contexts/UserContext';
-import { DIRECTORY_FEE, directoryBenefits, directoryCategories } from '../../data/directory';
-import { MY_BUSINESS_ID } from '../../data/businesses';
+import { directoryBenefits, directoryCategories } from '../../data/directory';
+
 import { usePageMeta } from '../../hooks/usePageMeta';
 import { track } from '../../utils/analytics';
-import { formatNaira } from '../../utils/checks';
-import { slugify } from '../../utils/directory';
+
+
 import { inputClass, primaryButton, secondaryButton, textareaClass } from '../../utils/formStyles';
-import type { Business } from '../../types/trust';
+
 
 interface FormState {
   name: string;
@@ -37,11 +37,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Register a business in the directory: details → review & pay ₦6,000/year → awaiting approval. */
 export function DirectoryRegister() {
   const { session } = useUser();
-  const { myBusiness, businesses, saveBusiness, addInvoice, notify } = useTrust();
-  const reuseMine = !myBusiness.directory;
+  const { myBusiness, businesses } = useTrust();
+  const reuseMine = Boolean(myBusiness.id) && !myBusiness.directory;
   const [step, setStep] = useState<Step>('details');
   const [tried, setTried] = useState(false);
-  const [payOpen, setPayOpen] = useState(false);
+  const [busy,setBusy]=useState(false);const [serverError,setServerError]=useState('');
   const [savedId, setSavedId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(() => ({
     name: reuseMine ? myBusiness.name : '',
@@ -57,12 +57,12 @@ export function DirectoryRegister() {
     agree: false
   }));
 
-  usePageMeta({ title: 'List your business', description: `Get your business on the PadiCheck Directory for ${formatNaira(DIRECTORY_FEE)} a year — with reviews and a public profile.` });
+  usePageMeta({title:'List your business',description:'Register business details and submit evidence for review.'});
 
   const errors = useMemo(() => {
     const e: Partial<Record<keyof FormState, string>> = {};
     if (form.name.trim().length < 2) e.name = 'Enter your business name';else
-    if (businesses.some((b) => b.id !== (reuseMine ? MY_BUSINESS_ID : '') && b.name.trim().toLowerCase() === form.name.trim().toLowerCase())) e.name = 'A business with this name is already listed. Contact us if it’s yours.';
+    if (businesses.some((b) => b.id !== (reuseMine ? myBusiness.id : '') && b.name.trim().toLowerCase() === form.name.trim().toLowerCase())) e.name = 'A business with this name is already listed. Contact us if it’s yours.';
     if (!form.category) e.category = 'Choose a category';
     if (form.description.trim().length < 30) e.description = 'Describe what you do in at least 30 characters';
     if (form.location.trim().length < 3) e.location = 'Enter your address or area and city';
@@ -109,63 +109,25 @@ export function DirectoryRegister() {
     window.scrollTo({ top: 0 });
   };
 
-  const onPaid = (method: string, reference: string) => {
-    const now = new Date().toISOString();
-    const id = reuseMine ? MY_BUSINESS_ID : `biz-${Date.now().toString(36)}`;
-    const base: Business = reuseMine ?
-    myBusiness :
-    {
-      id,
-      slug: `${slugify(form.name)}-${Date.now().toString(36).slice(-4)}`,
-      name: '',
-      category: '',
-      description: '',
-      location: '',
-      website: '',
-      phone: '',
-      email: '',
-      socials: [],
-      regNumber: '',
-      owner: session.name,
-      verification: 'none',
-      tier: 'Basic Verification',
-      score: 65,
-      views30d: 0,
-      checks30d: 0,
-      documents: []
-    };
-    saveBusiness({
-      ...base,
-      name: form.name.trim(),
-      category: form.category,
-      description: form.description.trim(),
-      location: form.location.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      website: form.website.trim().replace(/^https?:\/\//, ''),
-      socials: form.social.trim() ? [form.social.trim()] : [],
-      regNumber: form.regNumber.trim() || base.regNumber,
-      directory: { status: 'pending', feeNaira: DIRECTORY_FEE, submittedAt: now, paidAt: now, reference, hours: form.hours.trim() || undefined }
-    });
-    addInvoice({ id: reference, label: `Directory listing · ${form.name.trim()} · 1 year`, amountNaira: DIRECTORY_FEE, status: 'paid', method, at: now });
-    notify({ category: 'verification', title: 'Listing submitted for approval', body: `${form.name.trim()} will appear in Explore Businesses once our team approves it — usually within 1 working day.`, to: '/business/listing' });
-    track('directory_listing_paid', { category: form.category });
-    setSavedId(id);
+  const submitRegistration=async()=>{
+    if(busy||!valid)return;setBusy(true);setServerError('');
+    try{const response=await api<{business:{business_profile_id:string}}>('/v1/businesses',{auth:true,method:'POST',json:{canonical_name:form.name.trim(),business_category:form.category,profile_description:form.description.trim(),city:form.location.trim(),phone:form.phone.trim(),email:form.email.trim(),...(form.website.trim()?{website:/^https?:\/\//i.test(form.website.trim())?form.website.trim():'https://'+form.website.trim()}:{}),...(form.social.trim()?{social:form.social.trim()}:{}),...(form.regNumber.trim()?{registration_number:form.regNumber.trim()}:{}),...(form.hours.trim()?{opening_hours:form.hours.trim()}:{})}});setSavedId(response.business.business_profile_id);window.dispatchEvent(new Event('padicheck-data-updated'));setStep('done');window.scrollTo({top:0});}
+    catch(error){setServerError(apiErrorMessage(error));}finally{setBusy(false);}
   };
 
   if (step === 'done') {
     return (
       <div className="mx-auto max-w-xl px-4 pt-12 text-center">
         <CircleCheckIcon className="mx-auto h-14 w-14 text-brand" aria-hidden="true" />
-        <h1 className="mt-4 text-2xl font-bold text-ink">Listing submitted</h1>
+        <h1 className="mt-4 text-2xl font-bold text-ink">Business profile saved</h1>
         <p className="mt-2 text-ink-soft">
-          Payment received. Our team reviews new listings within 1 working day. We’ll notify you when <strong className="font-semibold text-ink">{form.name.trim()}</strong> goes live in Explore Businesses.
+          Your draft profile is saved. Upload verification documents next. A staff review is required before your business is published. No payment has been taken.
         </p>
         <ol className="mx-auto mt-8 max-w-sm space-y-3 text-left">
           {[
-          { text: 'Details & payment', done: true },
+          { text: 'Business details saved', done: true },
           { text: 'PadiCheck review', done: false },
-          { text: 'Live in the directory for 12 months', done: false }].
+          { text: 'Directory publication after review', done: false }].
           map((s, i) =>
           <li key={s.text} className="flex items-center gap-3">
               <span className={`grid h-8 w-8 place-items-center rounded-full text-sm font-semibold ${s.done ? 'bg-brand text-white' : i === 1 ? 'bg-sky-soft text-sky' : 'bg-canvas text-muted'}`}>
@@ -176,8 +138,8 @@ export function DirectoryRegister() {
           )}
         </ol>
         <div className="mt-8 flex flex-wrap justify-center gap-2">
-          <Link to="/business/listing" className={primaryButton}>
-            Track my listing
+          <Link to={`/business/verification?business_profile_id=${savedId}`} className={primaryButton}>
+            Continue to verification
           </Link>
           <Link to="/directory" className={secondaryButton}>
             Explore businesses
@@ -190,7 +152,7 @@ export function DirectoryRegister() {
   return (
     <div className="mx-auto grid max-w-6xl gap-10 px-4 pt-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-10 lg:pt-12">
       <div>
-        <p className="text-sm font-medium text-muted">{step === 'details' ? 'Step 1 of 2 · Business details' : 'Step 2 of 2 · Review & pay'}</p>
+        <p className="text-sm font-medium text-muted">{step === 'details' ? 'Step 1 of 2 · Business details' : 'Step 2 of 2 - Review details'}</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight text-ink">List your business on PadiCheck</h1>
 
         {step === 'details' ?
@@ -258,11 +220,12 @@ export function DirectoryRegister() {
               </p>
           }
             <button type="submit" className={`${primaryButton} w-full sm:w-auto`}>
-              Continue to payment
+              Review details
             </button>
           </form> :
 
         <section className="mt-6 space-y-5">
+            {serverError&&<p role="alert" className="rounded-2xl bg-danger-soft p-3 text-sm text-danger">{serverError}</p>}
             <dl className="divide-y divide-line rounded-3xl bg-surface p-2 ring-1 ring-line">
               {[
             ['Business', form.name],
@@ -281,17 +244,17 @@ export function DirectoryRegister() {
             </dl>
             <div className="flex items-center justify-between rounded-3xl bg-brand-soft p-5">
               <div>
-                <p className="font-semibold text-ink">PadiCheck Directory · 12 months</p>
-                <p className="text-sm text-ink-soft">Renews yearly. Fully refunded if we don’t approve your listing.</p>
+                <p className="font-semibold text-ink">Business registration</p>
+                <p className="text-sm text-ink-soft">Your draft will be reviewed before publication.</p>
               </div>
-              <p className="text-2xl font-bold text-ink">{formatNaira(DIRECTORY_FEE)}</p>
+              <p className="text-sm font-semibold text-ink">No payment taken</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => setStep('details')} className={secondaryButton}>
                 Edit details
               </button>
-              <button type="button" onClick={() => setPayOpen(true)} className={primaryButton}>
-                Pay {formatNaira(DIRECTORY_FEE)} and submit
+              <button type="button" disabled={busy} onClick={()=>void submitRegistration()} className={primaryButton}>
+                {busy?'Saving...':'Save business profile'}
               </button>
             </div>
           </section>
@@ -304,8 +267,8 @@ export function DirectoryRegister() {
             <StoreIcon className="h-5 w-5" aria-hidden="true" />
           </span>
           <p className="mt-4 text-3xl font-bold text-ink">
-            {formatNaira(DIRECTORY_FEE)}
-            <span className="text-base font-medium text-muted"> / year</span>
+            Business profile
+            <span className="block text-base font-medium text-muted">Verification and publication require review</span>
           </p>
           <ul className="mt-5 space-y-4">
             {directoryBenefits.map((b) =>
@@ -324,19 +287,7 @@ export function DirectoryRegister() {
         </div>
       </aside>
 
-      <CheckoutSheet
-        open={payOpen}
-        onClose={() => {
-          setPayOpen(false);
-          if (savedId) {
-            setStep('done');
-            window.scrollTo({ top: 0 });
-          }
-        }}
-        title="Pay for your listing"
-        description={`${form.name.trim()} · PadiCheck Directory, 12 months`}
-        amountNaira={DIRECTORY_FEE}
-        onPaid={onPaid} />
+
       
     </div>);
 

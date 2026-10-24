@@ -17,7 +17,7 @@ export function businessView(row: PublicBusiness, detail?: PublicBusinessDetail)
     website: identifier('url') || identifier('domain'), phone: identifier('phone'), email: identifier('email'), regNumber: identifier('registration_number'),
     verification: detail?.verification_review?.status === 'approved' ? 'verified' : 'none',
     lastVerifiedAt: detail?.verification_review?.reviewed_at,
-    directory: { status: 'active', feeNaira: NaN, submittedAt: '' },
+    directory: { status: row.profile_status==='draft'?'pending':row.profile_status==='hidden'?'suspended':'active', feeNaira: NaN, submittedAt: '',hours:row.profile_details?.opening_hours||undefined },
   };
 }
 export function businessEntity(business: Business): TrustEntity {
@@ -32,14 +32,14 @@ export function investigationView(row: Investigation): AnalysisResult {
     verdict: 'caution', status: row.status.replace(/_/g, ' '), summary: row.result_summary || 'Open this check to view its current status and available evidence.', sections: [], looksGood: [], toCheck: [], creditsUsed: NaN, availableOffline: false };
 }
 export function reportView(row: Record<string, unknown>): UserReport {
-  const status = ({ submitted: 'pending', under_review: 'review', published: 'resolved', dismissed: 'rejected', withdrawn: 'rejected' } as const)[String(row.status)] || 'pending';
+  const status = ({ submitted: 'pending', under_review: 'review', published: 'resolved', dismissed: 'rejected', rejected: 'rejected', withdrawn: 'withdrawn' } as const)[String(row.status)] || 'pending';
   return { id: String(row.user_report_id), entityId: String(row.entity_id || ''), entityName: String(row.title || ''), entityType: 'business', category: String(row.report_category || ''),
     description: String(row.description || ''), evidence: [], reporter: String(row.submitted_by_user_id || ''), status, risk: 'medium', at: String(row.submitted_at || row.created_at || ''), updates: [] };
 }
 export function disputeView(row: Record<string, unknown>): Dispute {
-  return { id: String(row.dispute_id), reportId: String(row.user_report_id || ''), businessId: String(row.business_profile_id || ''), businessName: String(row.title || 'Dispute'),
-    request: 'review', statement: String(row.reason || row.statement || ''), evidence: [], status: row.status === 'resolved' ? 'upheld' : row.status === 'under_review' ? 'review' : 'open',
-    at: String(row.created_at || row.filed_at || ''), messages: [] };
+  return { id: String(row.dispute_id), reportId: String(row.user_report_id || ''), businessId: String(row.business_profile_id || ''), businessName: String(row.business_name || row.title || 'Dispute'),
+    request: 'review', statement: String(row.reason || row.statement || ''), evidence: [], status: row.status === 'resolved' ? 'resolved' : row.status === 'rejected' ? 'rejected' : row.status === 'withdrawn' ? 'withdrawn' : row.status === 'under_review' ? 'review' : 'open',
+    decision: row.decision_note ? String(row.decision_note) : undefined, at: String(row.created_at || row.filed_at || ''), messages: [] };
 }
 export function notificationView(row: AppNotice): AppNotification {
   const invitation = row.notification_type === 'business.invitation';
