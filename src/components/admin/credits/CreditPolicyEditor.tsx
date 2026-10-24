@@ -27,5 +27,6 @@ export function CreditPolicyEditor({mode}:{mode:'welcome'|'costs'}){
  {!state.data?.enabled&&<p className="text-sm text-caution">Credit enforcement is disabled on the server. Save the amounts before enabling CREDITS_ENABLED.</p>}
  {!valid&&<p className="text-sm text-danger">Use whole numbers between 0 and 100,000.</p>}
  <button type="button" disabled={!changed||!valid||busy||!online} onClick={()=>void save()} className={`${primaryButton} h-11 disabled:opacity-50`}>{busy?'Saving...':'Save credit settings'}</button>
+ <button type="button" disabled={busy||!online} onClick={state.refresh} className="ml-3 text-sm text-brand-dark underline">Reload saved settings</button>
  </div>;
 }

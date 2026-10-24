@@ -223,6 +223,7 @@ export function CheckFlow() {
         summary={flow.summary}
         cost={flow.cost}
         credits={flow.credits}
+        ready={flow.ready}
         online={flow.online} />
       
     </>);

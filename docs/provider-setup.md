@@ -92,6 +92,8 @@ A subsequent real UI company search exposed an evidence-validation failure: the 
 
 ## 3. Bachs sandbox
 
+For the exact current tunnel URL, event subscriptions, backend environment block and acceptance steps, follow [Bachs through ngrok](bachs-ngrok-setup.md).
+
 For the new phone intelligence, business registry and property-location integrations, use the separate [verification provider setup guide](verification-providers.md). These services default to disabled and need their own accounts; the Gemini/Google login credentials do not enable them.
 
 Create/sign into [Bachs](https://app.bachs.io/) and use its sandbox. In the developer section, create a sandbox API key. Create the actual one-time/recurring products you intend to sell. Obtain the merchant organization/account ID and create a webhook destination; keep its signing secret private. See the [official Bachs quickstart](https://docs.bachs.io/introduction) and the backend's `docs/payments.md` for supported event subscriptions and offer mapping.

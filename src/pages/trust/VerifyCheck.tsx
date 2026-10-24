@@ -1,4 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import {toast} from 'sonner';
+import {useCreditCost} from '../../hooks/useCreditCost';
+import {creditCostType} from '../../utils/investigations';
+import {ApiError as HttpError,apiErrorMessage} from '../../api/client';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckIcon, InfoIcon, LoaderCircleIcon, SearchIcon } from 'lucide-react';
@@ -23,6 +27,8 @@ export function VerifyCheck() {
   const meta = entityTypeById(type);
   const { online } = usePwa();
   const { credits } = useUser();
+  const pricing=useCreditCost(creditCostType(meta?.id??'any',type==='website'||type==='listing'?'link':'text'),credits);
+  const inFlight=useRef(false);
   const { entities, upsertEntity, recordCheck } = useTrust();
   const [value, setValue] = useState(params.get('q') ?? '');
   const [country, setCountry] = useState('+234');
@@ -45,17 +51,20 @@ export function VerifyCheck() {
 
   const start = () => {
     setTouched(true);
-    if (error) return;
+    if (error || pricing.loading) return;
+    if(pricing.error){pricing.refresh();toast.error(apiErrorMessage(pricing.error));return;}
     setConfirmOpen(true);
   };
 
   const run = async () => {
+    if(inFlight.current||pricing.loading||pricing.error)return;
+    inFlight.current=true;
     setConfirmOpen(false);
 
     setPhase('loading');
     track('check_started', { type: meta.id });
     try {
-      const result = await runTrustCheck(meta.id, fullInput, entities);
+      const result = await runTrustCheck(meta.id, fullInput, entities,pricing.enabled?pricing.cost:undefined);
       if (!result) {
         setPhase('no-result');
         return;
@@ -65,11 +74,13 @@ export function VerifyCheck() {
       track('check_completed', { type: meta.id, score: result.score });
       navigate(`/result/${result.id}`, { replace: true });
     } catch (e) {
-      if (e instanceof ApiError) {
+      if(e instanceof HttpError&&(e.status===402||e.code==='credit_price_changed')){
+        if(e.code==='credit_price_changed')pricing.refresh();toast.error(apiErrorMessage(e));setPhase('input');
+      }else if (e instanceof ApiError) {
         setRetryAfter(e.retryAfter ?? 0);
         setPhase(e.code === 'rate_limited' ? 'rate-limited' : e.code === 'network' ? 'network' : 'unavailable');
       } else setPhase('error');
-    }
+    }finally{inFlight.current=false;}
   };
 
   if (phase === 'loading') {
@@ -101,7 +112,7 @@ export function VerifyCheck() {
         <div className="mx-auto w-full max-w-xl px-4">
           <StateView
             kind={phase}
-            body={phase === 'rate-limited' ? `Please wait about ${retryAfter} seconds, then try again. Your credits were returned.` : phase === 'no-result' ? `No public information matched “${value}”. Your credits were returned. That isn’t proof it’s safe — ask for more details.` : undefined}
+            body={phase === 'rate-limited' ? `Please wait about ${retryAfter} seconds, then try again.` : phase === 'no-result' ? `No public information matched “${value}”. That isn’t proof it’s safe — ask for more details.` : 'We could not confirm this check. Review History and your credit activity before starting another check.'}
             action={
             <>
                 <button type="button" onClick={() => setPhase('input')} className="h-12 rounded-2xl bg-brand px-6 font-semibold text-white hover:bg-brand-dark">
@@ -175,7 +186,7 @@ export function VerifyCheck() {
 
           <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+12px)] z-10 mt-4">
             <button type="submit" className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand text-base font-semibold text-white shadow-float transition-colors hover:bg-brand-dark sm:w-auto sm:px-8 lg:shadow-none">
-              <SearchIcon className="h-5 w-5" aria-hidden="true" /> Check Now · {meta.credits} credit{meta.credits > 1 ? 's' : ''}
+              <SearchIcon className="h-5 w-5" aria-hidden="true" /> Check Now · {Number.isFinite(pricing.cost)?pricing.cost:'—'} credits
             </button>
           </div>
         </form>
@@ -193,11 +204,11 @@ export function VerifyCheck() {
           </section>
           <p className="flex gap-2 rounded-3xl bg-sky-soft p-5 text-sm leading-relaxed text-sky">
             <InfoIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            Results combine verified records, user reports and AI risk signals. Each is labelled so you know what’s confirmed and what isn’t. If nothing is found, your credits come back.
+            Results combine available records, user reports and AI risk signals. Each is labelled so you know what’s confirmed and what isn’t. Review the evidence and limitations before deciding.
           </p>
         </aside>
       </div>
-      <ConfirmCheckSheet open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={run} checkLabel={meta.checkLabel} summary={value} cost={Number.isFinite(credits) ? 1 : NaN} credits={credits} online={online} />
+      <ConfirmCheckSheet open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={run} checkLabel={meta.checkLabel} summary={value} cost={pricing.cost} credits={credits} online={online} ready={!pricing.loading&&!pricing.error} />
     </>);
 
 }

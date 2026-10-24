@@ -4,9 +4,14 @@ import { PageHeader } from '../../components/consumer/PageHeader';
 import { EntityRow } from '../../components/trust/EntityRow';
 import { useTrust } from '../../contexts/TrustContext';
 import { entityTypes } from '../../data/entityTypes';
+import {useUser} from '../../contexts/UserContext';
+import {useCreditCost} from '../../hooks/useCreditCost';
+import {creditCostType} from '../../utils/investigations';
 
 export function Verify() {
   const { myCheckIds, getEntity } = useTrust();
+  const {credits}=useUser();
+  const pricing=useCreditCost('general_research',credits);
   const recent = myCheckIds.map(getEntity).filter((e): e is NonNullable<typeof e> => Boolean(e)).slice(0, 4);
 
   return (
@@ -31,7 +36,7 @@ export function Verify() {
                   <span>
                     <span className="block font-semibold text-ink">{t.label}</span>
                     <span className="block text-xs text-muted">
-                      {t.credits} credit{t.credits > 1 ? 's' : ''}
+                      {pricing.data?.enabled&&pricing.data.policy?`${pricing.data.policy.costs[creditCostType(t.id,t.id==='website'||t.id==='listing'?'link':'text')]} credits`:'Cost shown before confirmation'}
                     </span>
                   </span>
                 </Link>

@@ -5,7 +5,7 @@ export interface InvestigationInput {
   investigation_type: InvestigationType;
   title?: string;
   user_prompt: string;
-  input_data?: { urls?: string[]; media_ids?: string[]; check_context?: 'business' | 'phone' | 'property' | 'job'; verification?: VerificationInput; targets?: { entity_type: 'business' | 'person' | 'website' | 'job_listing' | 'property_listing' | 'service_provider' | 'other'; canonical_name: string; target_role?: 'primary' | 'candidate' | 'comparison'; identifiers?: { identifier_type: 'phone' | 'email' | 'url' | 'domain' | 'social_profile' | 'registration_number' | 'address' | 'other'; value: string }[] }[] };
+  input_data?: { urls?: string[]; media_ids?: string[]; check_context?: 'business' | 'phone' | 'property' | 'job' | 'shopping' | 'freelance' | 'person' | 'social' | 'listing'; verification?: VerificationInput; targets?: { entity_type: 'business' | 'person' | 'website' | 'job_listing' | 'property_listing' | 'service_provider' | 'other'; canonical_name: string; target_role?: 'primary' | 'candidate' | 'comparison'; identifiers?: { identifier_type: 'phone' | 'email' | 'url' | 'domain' | 'social_profile' | 'registration_number' | 'address' | 'other'; value: string }[] }[] };
 }
 export interface VerificationInput { business_name?: string; registration_number?: string; country_code?: string; jurisdiction_code?: string; address?: string; employer_name?: string; official_website?: string; }
 export interface SpecialistCheck { kind: 'phone' | 'business' | 'property' | 'job'; provider: string; status: string; checked_at: string | null; summary: string; facts: { label: string; value: string }[]; source_url: string; }

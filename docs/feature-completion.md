@@ -11,6 +11,14 @@
 
 ## Implemented in this completion pass
 
+- 24 October: added real superadmin plan creation/editing at `/admin/plans` and `/admin/plans/new`, with NGN-only prices, features, credit allowances, publishing and a single admin-selected popular plan per audience. Naira checkout is explicitly a one-time 30-/365-day manual-renewal pass, with idempotent provider products and expiring credit grants; no USD conversion or automatic recurring charges. Migration 008 applied. Created the explicitly requested local test superadmin and two consumers; passwords are in a Git-ignored local file blocked by Vite. Optional catalog seeding was declined; existing cards remain unavailable previews until admin publishes replacements. See [admin plans](admin-plans.md).
+
+- 24 October: connected the original Billing history table to an authenticated owner-scoped, environment-scoped backend history endpoint, using recorded one-time payments and verified subscription invoice grants. Added pagination/loading/error/empty/refresh states and refresh on checkout payment confirmation. Currency-aware receipt details replace fabricated VAT/card-method data. See [billing history](billing-history.md).
+
+- 24 October: fixed sign-in loss on refresh, new tabs and hosted-checkout return. Added an HttpOnly same-origin browser session, hash-only server storage, short-lived bearer renewal, protected-page restoration gating and persistent logout/revocation. Migration 007 is applied locally. Original authentication time and sensitive-action reauthentication boundaries are preserved. The user confirmed `/credits` refresh and `/account` in a new tab both stay signed in and show the paid 10 credits. See [browser sessions](browser-sessions.md).
+
+- 24 October: connected existing admin Welcome credits and What checks cost controls to persisted superadmin-only policy APIs, with revision checks and audit history. Verified email/Google signup awards once in the account transaction; per-category spending is atomic, supports multiple grants and rejects stale confirmed prices or insufficient balance without saving a check. Frontend balances/activity and both search flows use backend costs. Migration 006 is applied locally. Enforcement defaults off until an admin configures amounts and enables backend `CREDITS_ENABLED`; no arbitrary welcome bonus or retroactive award was chosen. See [credit integration](credit-integration.md). Failed/cancelled checks are not automatically refunded; retries of the same check do not add charges.
+
 - Corrected business reports to match server entity IDs, not business names.
 - Corrected withdrawn/rejected/resolved report/dispute presentation; a resolved dispute is no longer falsely labelled as upholding the original report.
 - Added real report/dispute/verification withdrawal controls to original screens and real share-link listing/revocation, with original sheet/button styles.

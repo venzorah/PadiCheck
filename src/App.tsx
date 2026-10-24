@@ -90,6 +90,7 @@ const AdminUsers = named(() => import('./pages/admin/AdminUsers'), 'AdminUsers')
 const AdminUserDetail = named(() => import('./pages/admin/AdminUserDetail'), 'AdminUserDetail');
 const AdminSupport = named(() => import('./pages/admin/AdminSupport'), 'AdminSupport');
 const AdminCredits = named(() => import('./pages/admin/AdminCredits'), 'AdminCredits');
+const AdminPlans = named(() => import('./pages/admin/AdminPlans'), 'AdminPlans');
 const AdminPayments = named(() => import('./pages/admin/AdminPayments'), 'AdminPayments');
 const AdminAnalyzers = named(() => import('./pages/admin/AdminAnalyzers'), 'AdminAnalyzers');
 const AdminProviders = named(() => import('./pages/admin/AdminProviders'), 'AdminProviders');
@@ -128,6 +129,8 @@ export function App({ platformPreview = 'auto', simulateOffline = false, adminRo
                 <Route path="support" element={<AdminSupport />} />
                 <Route path="support/:id" element={<AdminSupport />} />
                 <Route path="credits" element={<AdminCredits />} />
+                <Route path="plans" element={<AdminPlans />} />
+                <Route path="plans/new" element={<AdminPlans />} />
                 <Route path="payments" element={<AdminPayments />} />
                 <Route path="analyzers" element={<AdminAnalyzers />} />
                 <Route path="providers" element={<AdminProviders />} />

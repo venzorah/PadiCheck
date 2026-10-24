@@ -11,9 +11,10 @@ interface ConfirmCheckSheetProps {
   cost: number;
   credits: number;
   online: boolean;
+  ready?: boolean;
 }
 
-export function ConfirmCheckSheet({ open, onClose, onConfirm, checkLabel, summary, cost, credits, online }: ConfirmCheckSheetProps) {
+export function ConfirmCheckSheet({ open, onClose, onConfirm, checkLabel, summary, cost, credits, online, ready=true }: ConfirmCheckSheetProps) {
   const short = credits < cost;
   const primaryClass = 'flex h-12 w-full items-center justify-center rounded-2xl font-semibold transition-colors';
 
@@ -28,7 +29,7 @@ export function ConfirmCheckSheet({ open, onClose, onConfirm, checkLabel, summar
             Get credits
           </Link> :
 
-      <button type="button" disabled={!online} onClick={onConfirm} className={`${primaryClass} bg-brand text-white hover:bg-brand-dark`}>
+      <button type="button" disabled={!online||!ready} onClick={onConfirm} className={`${primaryClass} bg-brand text-white hover:bg-brand-dark disabled:opacity-50`}>
             {online ? Number.isFinite(cost) ? `Analyze \u00b7 ${cost} credit${cost > 1 ? 's' : ''}` : 'Analyze' : 'Needs connection'}
           </button>
 
@@ -51,7 +52,7 @@ export function ConfirmCheckSheet({ open, onClose, onConfirm, checkLabel, summar
         </div>
         <div className="flex justify-between gap-4 p-4">
           <dt className="text-muted">Balance after</dt>
-          <dd className={`font-medium ${short ? 'text-danger' : 'text-ink'}`}>{Number.isFinite(credits) ? short ? `You have ${credits}` : credits - cost : 'Not enforced while billing is disabled'}</dd>
+          <dd className={`font-medium ${short ? 'text-danger' : 'text-ink'}`}>{Number.isFinite(credits) && Number.isFinite(cost) ? short ? `You have ${credits}` : credits - cost : 'Balance unavailable'}</dd>
         </div>
       </dl>
       {!online &&

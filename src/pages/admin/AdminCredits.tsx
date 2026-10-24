@@ -11,7 +11,6 @@ import { useAdminData } from '../../contexts/AdminDataContext';
 import { useAdminSession } from '../../contexts/AdminSessionContext';
 import { usePlatform } from '../../contexts/PlatformContext';
 import { usePwa } from '../../contexts/PwaContext';
-import { checkTypes } from '../../data/checkTypes';
 import { formatNaira, formatWhen } from '../../utils/checks';
 import { primaryButton } from '../../utils/formStyles';
 import type { CreditPackage } from '../../types/check';
@@ -42,7 +41,7 @@ export function AdminCredits() {
       
       <div className="grid gap-5 px-4 md:px-8 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div>
-          {!permissions.managePricing && <LockedNotice text="View only — editing packages needs the “Manage credit packages” permission." />}
+          {!permissions.managePricing && <LockedNotice text="Package editing is view only here. Check costs have separate server authorization below." />}
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {sorted.map((p) => {
               const hidden = p.active === false;

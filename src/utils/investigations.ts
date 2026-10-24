@@ -2,6 +2,11 @@ import type { CheckType } from '../types/check';
 import type { InvestigationInput, InvestigationStatus, InvestigationType, VerificationInput } from '../types/investigation';
 export type ResearchContext = CheckType | 'business' | 'phone' | 'website' | 'person' | 'social' | 'listing';
 
+export function creditCostType(context:ResearchContext,mode:string):import('../api/credits').CreditType{
+  if(['property','shopping','freelance','person','social','listing'].includes(context))return context as import('../api/credits').CreditType;
+  return context==='business'?'company_research':context==='phone'?'phone_lookup':context==='job'?'job_search':context==='contract'?'contract_review':mode==='link'?'web_analysis':'general_research';
+}
+
 export const investigationLabels: Record<InvestigationType, string> = {
   company_research: 'Business research', web_analysis: 'Website analysis', job_search: 'Job search',
   contract_review: 'Contract review', phone_lookup: 'Phone research', general_research: 'General research',
@@ -52,6 +57,6 @@ export function buildInvestigation(input: { type: ResearchContext; mode: 'link' 
   if (input.type === 'business' && verification.business_name) targets.push({ entity_type: 'business', canonical_name: verification.business_name, target_role: 'primary', identifiers: verification.registration_number ? [{ identifier_type: 'registration_number', value: verification.registration_number }] : [] });
   if (input.type === 'property' && verification.address) targets.push({ entity_type: 'property_listing', canonical_name: verification.address.slice(0, 200), target_role: 'primary', identifiers: [{ identifier_type: 'address', value: verification.address }] });
   if (input.type === 'job' && verification.employer_name) targets.push({ entity_type: 'business', canonical_name: verification.employer_name, target_role: 'primary', identifiers: verification.official_website ? [{ identifier_type: 'domain', value: new URL(verification.official_website).hostname }] : [] });
-  const check_context = ['business', 'phone', 'property', 'job'].includes(input.type) ? input.type as 'business' | 'phone' | 'property' | 'job' : undefined;
+  const check_context = ['business', 'phone', 'property', 'job', 'shopping', 'freelance', 'person', 'social', 'listing'].includes(input.type) ? input.type as NonNullable<InvestigationInput['input_data']>['check_context'] : undefined;
   return { investigation_type, title: `${investigationLabels[investigation_type]}: ${input.mode === 'text' ? input.text.trim() : input.mode === 'link' ? urls[0] : 'Submitted documents'}`.slice(0, 200), user_prompt, input_data: { urls, media_ids: input.mediaIds, ...(targets.length ? { targets } : {}), ...(check_context ? { check_context } : {}), ...(Object.keys(verification).length ? { verification } : {}) } };
 }

@@ -29,8 +29,10 @@ export function validateCheckInput(type: EntityType, raw: string): string | null
 }
 function unsupported(): never { throw new ApiError('unavailable', 'Numerical Trust Scores and synthetic verification results are unavailable. Use investigations or directory APIs.'); }
 export function entityFromBusiness(business: Business): TrustEntity { return businessEntity(business); }
-export async function runTrustCheck(type: EntityType, input: string, _known: TrustEntity[]): Promise<TrustEntity | null> {
-  const response=await investigationsApi.create(buildInvestigation({type,mode:type==='website'||type==='listing'?'link':'text',text:input,url:input,mediaIds:[]}));
+export async function runTrustCheck(type: EntityType, input: string, _known: TrustEntity[], expectedCreditCost?:number): Promise<TrustEntity | null> {
+  const request=buildInvestigation({type,mode:type==='website'||type==='listing'?'link':'text',text:input,url:input,mediaIds:[]});
+  if(expectedCreditCost!==undefined)request.expected_credit_cost=expectedCreditCost;
+  const response=await investigationsApi.create(request);
   return {id:response.investigation.investigation_id,type,name:input,identifier:input,subtitle:response.investigation.status,score:NaN,confidence:'Low',verification:'unverified',lastChecked:response.investigation.created_at,facts:[],signals:[],factors:[],unresolvedReports:0,totalReports:0,recommendation:'Research is processing. Open the investigation for its status and evidence.'};
 }
 export async function refreshEntity(_entity: TrustEntity): Promise<TrustEntity> { return unsupported(); }

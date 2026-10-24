@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import {PageSkeleton} from '../components/Skeleton';
+import {ApiError} from '../api/client';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { authApi, type AuthSession, type Challenge, type Registration, type LoginResponse } from '../api/auth';
 import type {CreditBalance} from '../api/credits';
@@ -60,6 +62,13 @@ export function UserProvider({ children }: {
     children: ReactNode;
 }) {
     const location = useLocation();
+    const navigate=useNavigate();
+    const [restoring,setRestoring]=useState(true);
+    const [restoreFailure,setRestoreFailure]=useState('');
+    const [restoreAttempt,setRestoreAttempt]=useState(0);
+    const sessionOperation=useRef(0);
+    const restoringRef=useRef(true);
+    const renewSession=useRef(()=>setRestoreAttempt(value=>value+1));
     const [session, setSession] = useState<ConsumerSession | null>(null);
     const [pendingSignup, setPendingSignup] = useState<UserContextValue['pendingSignup']>(null);
     const [pendingMfa, setPendingMfa] = useState<UserContextValue['pendingMfa']>(null);
@@ -73,6 +82,7 @@ export function UserProvider({ children }: {
     const [preferences, setPreferences] = usePersistentState<Preferences>('pc-preferences', { country: 'NG', currency: 'NGN', language: 'en' });
     const expiryTimer = useRef<number>();
     const clearSession = useCallback(() => {
+        sessionOperation.current++;restoringRef.current=false;setRestoring(false);setRestoreFailure('');
         setAccessToken(null);
         setSession(null);
         setPendingSignup(null);
@@ -83,7 +93,7 @@ export function UserProvider({ children }: {
         clearPrivateState();
         window.clearTimeout(expiryTimer.current);
     }, []);
-    useEffect(() => { clearPrivateState(); const unsubscribe = onSessionExpired(clearSession); return () => { unsubscribe(); window.clearTimeout(expiryTimer.current); setAccessToken(null); }; }, [clearSession]);
+    useEffect(() => { clearPrivateState(); const unsubscribe = onSessionExpired(()=>{if(!restoringRef.current){restoringRef.current=true;renewSession.current();}}); return () => { unsubscribe(); window.clearTimeout(expiryTimer.current); setAccessToken(null); }; }, [clearSession]);
     useEffect(() => { if (!['/signup', '/verify-code'].includes(location.pathname))
         setPendingSignup(null); if (location.pathname !== '/security-complete') { setSecurityCodes([]); setSecurityCompleted(false); } }, [location.pathname]);
     useEffect(() => { document.documentElement.classList.toggle('data-saver', dataSaver); }, [dataSaver]);
@@ -108,8 +118,10 @@ export function UserProvider({ children }: {
         return ()=>abort.abort();
     }, [session?.id,location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
     const acceptSession = useCallback(async (result: AuthSession, provider: ConsumerSession['provider'] = 'email') => {
+        const operation=sessionOperation.current;
         const expiresAt = Date.now() + result.expires_in * 1000;
         const { user } = await authApi.me(result.access_token);
+        if(operation!==sessionOperation.current)throw new Error('Session changed');
         if (Date.now() >= expiresAt)
             throw new Error('Session expired');
         clearPrivateState();
@@ -119,8 +131,21 @@ export function UserProvider({ children }: {
         setPendingSignup(null);
         setPendingMfa(null);
         setSecurityCodes([]);
-        expiryTimer.current = window.setTimeout(clearSession, expiresAt - Date.now());
+        expiryTimer.current = window.setTimeout(()=>renewSession.current(), Math.max(1000,expiresAt-Date.now()-60000));
     }, [clearSession]);
+    useEffect(()=>{
+        let cancelled=false;const operation=++sessionOperation.current;
+        restoringRef.current=true;setRestoring(true);setRestoreFailure('');
+        void authApi.restore().then(async result=>{
+            if(cancelled||operation!==sessionOperation.current)return;
+            await acceptSession(result);
+        }).catch(error=>{
+            if(cancelled||operation!==sessionOperation.current)return;
+            if(error instanceof ApiError&&error.status===401)clearSession();
+            else {setRestoreFailure(apiErrorMessage(error));window.clearTimeout(expiryTimer.current);expiryTimer.current=window.setTimeout(()=>renewSession.current(),15000);}
+        }).finally(()=>{if(!cancelled){restoringRef.current=false;setRestoring(false);}});
+        return()=>{cancelled=true;sessionOperation.current++;};
+    },[restoreAttempt,acceptSession,clearSession]);
     const handleLogin = useCallback(async (result: LoginResponse, provider: ConsumerSession['provider']) => {
         return dispatchLoginResponse(result, {
             challenge: (challenge) => { clearSession(); setPendingMfa({ token: challenge.challenge_token, expiresAt: Date.now() + challenge.expires_in * 1000, provider }); },
@@ -148,6 +173,7 @@ export function UserProvider({ children }: {
         toast.error(`Local sign-out only; server revocation could not be confirmed. ${apiErrorMessage(error)}`);
     }
     finally {
+        try{await authApi.endBrowserSession();}catch{toast.error('Browser sign-out could not be confirmed. Reconnect and sign out again.');}
         clearSession();
         window.google?.accounts.id.disableAutoSelect();
     } }, [clearSession]);
@@ -160,7 +186,9 @@ export function UserProvider({ children }: {
             return; void notificationsApi.setPreference(id as Parameters<typeof notificationsApi.setPreference>[0], on).then(() => setNotificationPrefs((old) => ({ ...old, [id]: on }))).catch((error) => toast.error(apiErrorMessage(error))); },
         preferences, setPreference: (key, value) => setPreferences((old) => ({ ...old, [key]: value }))
     }), [queue, session, savedIds, credits, transactions, pendingSignup, pendingMfa, securityCodes, securityCompleted, clearSession, signIn, signInWithGoogle, signOut, startSignup, verifySignup, resendSignup, verifyMfa, dataSaver, setDataSaver, notificationPrefs, preferences, setPreferences]);
-    return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
+    const publicPage=/^\/(welcome|about|how-it-works|pricing|for-business|contact|help|legal\/|b\/|certificate|shared|directory|developers\/docs)/.test(location.pathname);
+    const content=publicPage||session?children:restoring?<PageSkeleton/>:restoreFailure?<div className="mx-auto max-w-lg space-y-4 px-4 py-12" role="alert"><p className="text-ink">We couldn’t restore your session. {restoreFailure}</p><button className="rounded-2xl bg-brand px-5 py-3 font-semibold text-white" onClick={()=>setRestoreAttempt(value=>value+1)}>Try again</button><button className="ml-3 text-brand-dark" onClick={()=>{clearSession();navigate('/signin',{replace:true,state:{from:location.pathname+location.search}});}}>Sign in again</button></div>:children;
+    return <UserContext.Provider value={value}>{content}</UserContext.Provider>;
 }
 export function useUser() { const context = useContext(UserContext); if (!context)
     throw new Error('useUser requires UserProvider'); return context; }

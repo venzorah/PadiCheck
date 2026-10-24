@@ -13,11 +13,12 @@ export class ApiError extends Error {
   }
 }
 export async function api<T>(path: string, options: {
-  method?: string; json?: unknown; file?: File; signal?: AbortSignal; auth?: boolean; token?: string;
+  method?: string; json?: unknown; file?: File; signal?: AbortSignal; auth?: boolean; token?: string; browserSession?: boolean;
 } = {}): Promise<T> {
   const token = options.auth ? (options.token ?? accessToken) : undefined;
   if (options.auth && !token) throw new ApiError(401, 'authentication_required', 'Please sign in to continue.');
   const headers = new Headers({ Accept: 'application/json' });
+  if(options.browserSession)headers.set('X-PadiCheck-Session','1');
   const requestUrl = `${baseUrl}${path}`;
   const hostname = new URL(requestUrl, globalThis.location?.origin ?? 'http://localhost').hostname;
   // Free ngrok tunnels otherwise replace API GET responses with browser-warning text.
@@ -34,7 +35,7 @@ export async function api<T>(path: string, options: {
     headers.set('Content-Type', 'application/json');
     body = JSON.stringify(options.json);
   }
-  const response = await fetch(requestUrl, { method: options.method ?? 'GET', headers, body, signal: options.signal, cache: 'no-store', credentials: 'omit' });
+  const response = await fetch(requestUrl, { method: options.method ?? 'GET', headers, body, signal: options.signal, cache: 'no-store', credentials: 'same-origin' });
   if (response.status === 204) return undefined as T;
   const data = await response.json().catch(() => undefined);
   if (!response.ok) {

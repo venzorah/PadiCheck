@@ -9,6 +9,7 @@ import { InstallGuideSheet } from '../pwa/InstallGuideSheet';
 import { SplashScreen } from '../pwa/SplashScreen';
 import { UpdateBanner } from '../pwa/UpdateBanner';
 import { useAdminSession } from '../../contexts/AdminSessionContext';
+import {adminReturnPath} from '../../utils/adminReturnPath';
 import { usePwa } from '../../contexts/PwaContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useAdminBadges } from '../../hooks/useAdminBadges';
@@ -24,8 +25,8 @@ export function AdminLayout() {
   const expanded = expandedPref ?? isDesktop;
   const isLogin = location.pathname === '/admin/login';
 
-  if (!session && !isLogin) return <Navigate to="/admin/login" replace />;
-  if (session && isLogin) return <Navigate to="/admin" replace />;
+  if (!session && !isLogin) return <Navigate to="/admin/login" replace state={{from:location.pathname+location.search}} />;
+  if (session && isLogin) return <Navigate to={adminReturnPath((location.state as {from?:unknown}|null)?.from)} replace />;
 
   return (
     <>

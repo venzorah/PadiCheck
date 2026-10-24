@@ -33,6 +33,7 @@ export default defineConfig(({ mode }) => {
     server: {
       allowedHosts: ['jean-unprospering-numerically.ngrok-free.dev'],
       watch: { ignored: ['**/.tmp/**'] },
+      fs: { deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/.tmp/**'] },
       proxy: Object.fromEntries(['/v1', '/health', '/ready'].map((path) => [path, { target, changeOrigin: true }])),
     },
   }

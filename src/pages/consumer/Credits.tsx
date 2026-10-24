@@ -18,7 +18,7 @@ export function Credits() {
   const [buyOpen, setBuyOpen] = useState(false);
   const offers=useApiData<{enabled:boolean;offers:BillingOffer[]}>('/v1/billing/offers',false);
   const hosted=useHostedCheckout();
-  const creditPackages=(offers.data?.offers||[]).filter(row=>row.billing_mode==='one_time').map(row=>({id:row.offer_key,name:row.display_name,credits:row.investigation_units,priceNaira:Number(row.amount),note:'',featured:false}));
+  const creditPackages=(offers.data?.offers||[]).filter(row=>row.billing_mode==='one_time'&&!row.plan_id).map(row=>({id:row.offer_key,name:row.display_name,credits:row.investigation_units,priceNaira:Number(row.amount),note:'',featured:false}));
   const [selected, setSelected] = useState(() => creditPackages.find((p) => p.featured)?.id ?? creditPackages[0]?.id ?? '');
   const [paying, setPaying] = useState(false);
   const pkg = creditPackages.find((p) => p.id === selected) ?? creditPackages[0];
@@ -36,7 +36,7 @@ export function Credits() {
               <span className="text-6xl font-bold tracking-tight">{Number.isFinite(credits)?credits:'—'}</span>
               <span className="text-lg text-navy-text">credits</span>
             </p>
-            {offers.data?.enabled===false&&<p className="mt-3 text-sm text-brand-bright">Billing is currently unavailable.</p>}{credits < 5 && <p className="mt-3 text-sm text-brand-bright">You’re running low — most checks use 2–3 credits.</p>}
+            {offers.data?.enabled===false&&<p className="mt-3 text-sm text-brand-bright">Credit purchases are currently unavailable.</p>}{credits < 5 && <p className="mt-3 text-sm text-brand-bright">You’re running low. Each check shows its current credit cost before confirmation.</p>}
             <button
               type="button"
               onClick={() => setBuyOpen(true)}

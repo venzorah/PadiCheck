@@ -74,7 +74,7 @@ export function AdminSettings() {
     <>
       <AdminPageHeader title="Settings" subtitle="Workspace, sign-ups, maintenance and security." />
       <div className="space-y-4 px-4 pb-28 md:px-8 lg:pb-6">
-        {!permissions.manageSettings && <LockedNotice text="View only — changing settings needs the “Change settings” permission." />}
+        {!permissions.manageSettings && <LockedNotice text="Other settings are view only. Welcome credits have separate server authorization below." />}
         <Section title="Workspace" description="How PadiCheck identifies itself to users.">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Workspace name">

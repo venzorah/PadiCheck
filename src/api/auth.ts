@@ -29,6 +29,8 @@ export interface MfaChallenge {
 }
 export type LoginResponse = AuthSession | MfaChallenge;
 export const authApi = {
+    restore: () => api<AuthSession>('/v1/auth/session',{method:'POST',browserSession:true}),
+    endBrowserSession: () => api<void>('/v1/auth/session',{method:'DELETE',browserSession:true}),
     requestPasswordReset: (email:string) => api<Challenge>('/v1/auth/password/reset/request',{method:'POST',json:{email}}),
     confirmPasswordReset: (json:{email:string;challenge_id:string;code:string;new_password:string}) => api<{changed:boolean;sign_in_required:boolean}>('/v1/auth/password/reset/confirm',{method:'POST',json}),
     register: (json: Registration) => api<Challenge>('/v1/auth/register', { method: 'POST', json }),

@@ -71,6 +71,7 @@ export const adminNavGroups: AdminNavGroup[] = [
   label: 'Money',
   items: [
   { to: '/admin/credits', label: 'Credits', icon: CoinsIcon },
+  { to: '/admin/plans', label: 'Plans', icon: CreditCardIcon },
   { to: '/admin/payments', label: 'Payments', icon: CreditCardIcon }]
 
 },

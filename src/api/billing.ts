@@ -6,6 +6,8 @@ export interface BillingOffer {
     currency: string;
     amount: string;
     investigation_units: number;
+    plan_id?:string|null;
+    validity_days?:number|null;
 }
 export interface BillingCheckout {
     billing_checkout_id: string;
@@ -23,6 +25,11 @@ export interface BillingBalance {
     available_units: string | number;
     subscriptions: BillingSubscription[];
 }
+export interface BillingHistoryEntry {
+    id:string;kind:'checkout'|'invoice';at:string;description:string;amount:string;currency:string;
+    status:'paid'|'failed'|'refunded';credits:number;reference:string|null;
+}
+export interface BillingHistory {entries:BillingHistoryEntry[];has_more:boolean;}
 export const billingApi = {
     create: (offer_key: string, request_key: string) => api<{
         checkout: BillingCheckout;

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {adminReturnPath} from '../../utils/adminReturnPath';
 import { KeyRoundIcon, LoaderCircleIcon, ShieldCheckIcon } from 'lucide-react';
 import { useAdminSession } from '../../contexts/AdminSessionContext';
 import { useUser } from '../../contexts/UserContext';
@@ -8,6 +9,8 @@ import { usePwa } from '../../contexts/PwaContext';
 
 export function AdminLogin() {
   const navigate = useNavigate();
+  const location=useLocation();
+  const from=adminReturnPath((location.state as {from?:unknown}|null)?.from);
   const { signIn } = useAdminSession();
   const {session}=useUser();
   const { identity, online } = usePwa();
@@ -28,7 +31,7 @@ export function AdminLogin() {
       return;
     }
     setBusy(true);
-    try {const accepted=await signIn(email,password);setPassword('');navigate(accepted?'/admin':'/mfa',{replace:true,state:{from:'/admin'}});}catch(error){setError(apiErrorMessage(error));}finally{setBusy(false);}
+    try {const accepted=await signIn(email,password);setPassword('');navigate(accepted?from:'/mfa',{replace:true,state:{from}});}catch(error){setError(apiErrorMessage(error));}finally{setBusy(false);}
   };
 
   const input =
