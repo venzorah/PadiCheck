@@ -161,7 +161,7 @@ test('Google SDK load failures permit retry and concurrent callers share one scr
 test('research contexts map to supported investigations without promising specialized checks', () => {
   const base = { type: 'shopping', mode: 'text', text: 'Research this seller and their offer', url: '', mediaIds: [] };
   assert.equal(buildInvestigation(base).investigation_type, 'general_research');
-  assert.equal(buildInvestigation({ ...base, type: 'job' }).investigation_type, 'general_research');
+  assert.equal(buildInvestigation({ ...base, type: 'job' }).investigation_type, 'job_search');
   assert.equal(buildInvestigation({ ...base, type: 'business' }).investigation_type, 'company_research');
   assert.equal(buildInvestigation({ ...base, mode: 'link', url: 'example.com' }).input_data.urls[0], 'https://example.com/');
   assert.equal(buildInvestigation({ ...base, mode: 'link', url: 'example.com' }).investigation_type, 'web_analysis');
@@ -236,6 +236,24 @@ test('media uploads use one multipart file and private delivery is requested fre
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const detailWith = (status, ai_analysis = true) => ({ investigation: { status }, capabilities: { independent_search: ai_analysis, ai_analysis }, limitations: [] });
+test('specialist inputs preserve explicit business, job and property matching details', () => {
+  const base = { type: 'business', mode: 'text', text: 'Research this business', url: '', mediaIds: [],
+    verification: { business_name: ' Example Ltd ', registration_number: ' RC123456 ', country_code: 'NG' } };
+  const business = buildInvestigation(base);
+  assert.equal(business.input_data.check_context, 'business');
+  assert.equal(business.input_data.verification.business_name, 'Example Ltd');
+  assert.equal(business.input_data.targets[0].identifiers[0].value, 'RC123456');
+  const job = buildInvestigation({ ...base, type: 'job', verification: { employer_name: 'Example Ltd', official_website: 'example.com' } });
+  assert.equal(job.investigation_type, 'job_search');
+  assert.equal(job.input_data.verification.official_website, 'https://example.com/');
+  assert.equal(job.input_data.targets[0].identifiers[0].value, 'example.com');
+  const property = buildInvestigation({ ...base, type: 'property', verification: { address: 'Example Street, Lagos' } });
+  assert.equal(property.input_data.check_context, 'property');
+  assert.equal(property.input_data.targets[0].entity_type, 'property_listing');
+  assert.throws(() => buildInvestigation({ ...base, type: 'job', verification: { official_website: 'ftp://example.com' } }), /HTTP or HTTPS/);
+  assert.throws(() => buildInvestigation({ ...base, type: 'job', verification: { official_website: 'https://user:secret@example.com' } }), /credentials/);
+});
+
 test('polling follows active states, slows down without AI, and stops at completion', async () => {
   const scheduled = [];
   const states = [];

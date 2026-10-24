@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { authApi, type AuthSession, type Challenge, type Registration, type LoginResponse } from '../api/auth';
+import type {CreditBalance} from '../api/credits';
 import { apiErrorMessage, onSessionExpired, setAccessToken } from '../api/client';
 import { notificationsApi } from '../api/notifications';
 import { bookmarksApi } from '../api/bookmarks';
@@ -67,6 +68,7 @@ export function UserProvider({ children }: {
     const [notificationPrefs, setNotificationPrefs] = useState<Record<string, boolean>>({});
     const [savedIds, setSavedIds] = useState<string[]>([]);
     const [credits, setCredits] = useState(Number.NaN);
+    const [transactions,setTransactions]=useState<CreditTransaction[]>([]);
     const [dataSaver, setDataSaver] = usePersistentState('pc-data-saver', false);
     const [preferences, setPreferences] = usePersistentState<Preferences>('pc-preferences', { country: 'NG', currency: 'NGN', language: 'en' });
     const expiryTimer = useRef<number>();
@@ -77,7 +79,7 @@ export function UserProvider({ children }: {
         setPendingMfa(null);
         setSecurityCodes([]); setSecurityCompleted(false);
         setNotificationPrefs({});
-        setSavedIds([]); setCredits(Number.NaN);
+        setSavedIds([]); setCredits(Number.NaN);setTransactions([]);
         clearPrivateState();
         window.clearTimeout(expiryTimer.current);
     }, []);
@@ -98,9 +100,13 @@ export function UserProvider({ children }: {
         if (!session) return;
         const abort = new AbortController();
         void api<{bookmarks:{investigation_id:string}[]}>('/v1/me/bookmarks?limit=100&offset=0',{auth:true,signal:abort.signal}).then(result=>{if(!abort.signal.aborted)setSavedIds(result.bookmarks.map(row=>row.investigation_id));}).catch(()=>undefined);
-        void api<{enabled:boolean;available_units:number}>('/v1/billing/me',{auth:true,signal:abort.signal}).then(result=>{if(!abort.signal.aborted)setCredits(result.enabled?result.available_units:Number.NaN);}).catch(()=>undefined);
+        void api<CreditBalance>('/v1/credits/me',{auth:true,signal:abort.signal}).then(async result=>{
+          if(abort.signal.aborted)return;
+          if(result.enabled){setCredits(result.available_units);setTransactions(result.transactions);}
+          else {const billing=await api<{enabled:boolean;available_units:number}>('/v1/billing/me',{auth:true,signal:abort.signal});if(!abort.signal.aborted){setCredits(billing.enabled?billing.available_units:Number.NaN);setTransactions([]);}}
+        }).catch(()=>undefined);
         return ()=>abort.abort();
-    }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [session?.id,location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
     const acceptSession = useCallback(async (result: AuthSession, provider: ConsumerSession['provider'] = 'email') => {
         const expiresAt = Date.now() + result.expires_in * 1000;
         const { user } = await authApi.me(result.access_token);
@@ -149,11 +155,11 @@ export function UserProvider({ children }: {
     const value = useMemo<UserContextValue>(() => ({ ...queue, session, pendingSignup, pendingMfa, securityCodes, securityCompleted, clearSession, signIn, signInWithGoogle, signOut, startSignup, verifySignup, resendSignup, verifyMfa,
         cancelMfa: () => setPendingMfa(null), completeSecurity: (codes = []) => { clearSession(); setSecurityCodes(codes); setSecurityCompleted(true); }, dismissSecurityCodes: () => { setSecurityCodes([]); setSecurityCompleted(false); },
         hasPermission: (permission) => Boolean(session?.permissions.includes(permission) || (session?.roles.includes('superadmin') && session.permissions.includes('*'))),
-        credits, transactions: [], spendCredits: () => false, addCredits: () => { throw new Error('Client credit grants are not supported.'); }, savedIds, isSaved: id => savedIds.includes(id), toggleSaved: async id => { const saved=savedIds.includes(id); if(saved) await bookmarksApi.remove(id);else await bookmarksApi.add(id);setSavedIds(old=>saved?old.filter(value=>value!==id):[...old,id]); },
+        credits, transactions, spendCredits: () => false, addCredits: () => { throw new Error('Client credit grants are not supported.'); }, savedIds, isSaved: id => savedIds.includes(id), toggleSaved: async id => { const saved=savedIds.includes(id); if(saved) await bookmarksApi.remove(id);else await bookmarksApi.add(id);setSavedIds(old=>saved?old.filter(value=>value!==id):[...old,id]); },
         dataSaver, setDataSaver, notificationPrefs, setNotificationPref: (id, on) => { if (!['investigation.completed', 'investigation.failed', 'business.invitation'].includes(id))
             return; void notificationsApi.setPreference(id as Parameters<typeof notificationsApi.setPreference>[0], on).then(() => setNotificationPrefs((old) => ({ ...old, [id]: on }))).catch((error) => toast.error(apiErrorMessage(error))); },
         preferences, setPreference: (key, value) => setPreferences((old) => ({ ...old, [key]: value }))
-    }), [queue, session, savedIds, credits, pendingSignup, pendingMfa, securityCodes, securityCompleted, clearSession, signIn, signInWithGoogle, signOut, startSignup, verifySignup, resendSignup, verifyMfa, dataSaver, setDataSaver, notificationPrefs, preferences, setPreferences]);
+    }), [queue, session, savedIds, credits, transactions, pendingSignup, pendingMfa, securityCodes, securityCompleted, clearSession, signIn, signInWithGoogle, signOut, startSignup, verifySignup, resendSignup, verifyMfa, dataSaver, setDataSaver, notificationPrefs, preferences, setPreferences]);
     return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }
 export function useUser() { const context = useContext(UserContext); if (!context)

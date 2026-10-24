@@ -1,3 +1,4 @@
+import {CreditPolicyEditor} from '../../components/admin/credits/CreditPolicyEditor';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -85,17 +86,7 @@ export function AdminCredits() {
             <h2 id="costs-heading" className="px-3 pb-1 pt-3 text-lg font-semibold text-ink">
               What checks cost
             </h2>
-            <ul className="grid sm:grid-cols-2">
-              {checkTypes.map((t) =>
-              <li key={t.id} className="flex min-h-[56px] items-center gap-3 px-3">
-                  <span className={`grid h-9 w-9 place-items-center rounded-xl ${t.tile}`}>
-                    <t.icon className="h-[18px] w-[18px]" aria-hidden="true" />
-                  </span>
-                  <span className="flex-1 text-ink">{t.longLabel}</span>
-                  <span className="font-semibold text-ink">{t.credits}</span>
-                </li>
-              )}
-            </ul>
+            <CreditPolicyEditor mode="costs" />
           </section>
         </div>
 

@@ -13,7 +13,7 @@ import { useInvestigation } from '../../hooks/useInvestigation';
 import { useApiData } from '../../hooks/useApiData';
 import { investigationsApi } from '../../api/investigations';
 import { api, apiErrorMessage } from '../../api/client';
-import { investigationView } from '../../utils/presentationAdapters';
+import { investigationView, specialistView } from '../../utils/presentationAdapters';
 import { PrivateMediaLink } from '../../components/PrivateMediaLink';
 import { ApiState } from '../../components/ApiUI';
 import type { InvestigationFinding, InvestigationSource } from '../../types/investigation';
@@ -39,7 +39,7 @@ export function Result() {
   const findings=useEvidenceRows<InvestigationFinding>(id||'', 'findings');
   const sources=useEvidenceRows<InvestigationSource>(id||'', 'sources');
   useEffect(()=>{if(detail.data?.investigation.status==='completed'){findings.refresh();sources.refresh();}},[detail.data?.investigation.status]); // eslint-disable-line react-hooks/exhaustive-deps
-  const result = detail.data ? {...investigationView(detail.data.investigation), sections:findings.rows.map(row=>({label:row.verification_status,verdict:'caution' as const,headline:row.title,detail:row.explanation})),toCheck:detail.data.limitations} : null;
+  const result = detail.data ? {...investigationView(detail.data.investigation), sections:[...(detail.data.specialist_checks || []).map(specialistView), ...findings.rows.map(row=>({label:row.verification_status,verdict:'caution' as const,headline:row.title,detail:row.explanation}))],toCheck:detail.data.limitations} : null;
   const [manageShares,setManageShares]=useState(false);
   const [shareUrl,setShareUrl]=useState('');
   const [saving,setSaving]=useState(false);
@@ -167,7 +167,7 @@ export function Result() {
                     {section.label}
                   </p>
                   <p className={`mt-2 text-[17px] font-semibold leading-snug ${verdictTone[section.verdict].text}`}>{section.headline}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-muted">{section.detail}</p>
+                  <p className="mt-1 break-words text-sm leading-relaxed text-muted">{section.detail}</p>
                 </li>
               )}
             </ul>

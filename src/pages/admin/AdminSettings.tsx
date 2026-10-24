@@ -1,3 +1,4 @@
+import {CreditPolicyEditor} from '../../components/admin/credits/CreditPolicyEditor';
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader';
@@ -88,9 +89,7 @@ export function AdminSettings() {
         <Section title="Accounts & credits" description="Sign-up rules and credit alerts.">
           <ToggleRow label="Allow new sign-ups" hint="Turn off to pause new accounts" checked={form.allowSignups} onChange={(v) => set('allowSignups', v)} disabled={!canEdit} />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Welcome credits" hint="Given to every new account">
-              <input inputMode="numeric" value={form.signupBonus} disabled={!canEdit} onChange={(e) => set('signupBonus', num(e.target.value, 0, 100))} className={inputClass} />
-            </Field>
+            <CreditPolicyEditor mode="welcome" />
             <Field label="Low-credit alert at" hint="Users are notified once below this">
               <input inputMode="numeric" value={form.lowCreditThreshold} disabled={!canEdit} onChange={(e) => set('lowCreditThreshold', num(e.target.value, 0, 100))} className={inputClass} />
             </Field>

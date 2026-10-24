@@ -53,6 +53,17 @@ npm.cmd run integrations:check
 
 The result should pass `gemini` and `ultrasearch`. Its output reports checks without exposing credentials. Then the AI registry must contain active provider/model/agent/task/tool assignments as specified in the backend's `docs/milestone-3.md`. This is part of the implementation work; a key alone is insufficient.
 
+The local registry uses `gemini-3.5-flash-lite`, the evidence reviewer, and all three required tools. This model completed a real public-text analysis in about 7.5 seconds and passed exact-quotation validation. Its selection is audited. The former `gemini-3.8-flash` assignment is disabled; its model and execution history are retained. Google rejected `gemini-2.5-flash-lite` with 404 and `gemini-3-flash-preview` timed out during the same comparison, so neither was enabled as a fallback. Model-list visibility alone does not guarantee generation access. The backend Gemini request uses the documented REST enum `APPLICATION_JSON` for structured output. See [Google's Generate Content structured-output reference](https://ai.google.dev/gemini-api/docs/generate-content/structured-output).
+
+For a **new, empty database only**, the operator setup command is available in the backend:
+
+```powershell
+node --import tsx scripts/configure-research.ts gemini-3.5-flash-lite
+node --import tsx scripts/configure-research.ts gemini-3.5-flash-lite --apply
+```
+
+The first command previews the change. The second initializes an empty registry transactionally and writes an audit record. It refuses to replace existing entries. Use authenticated AI administration for later edits. Model availability must be checked again when setting up another environment.
+
 Once provider checks and registry routing pass, change `RESEARCH_ENABLED=true`, restart the backend API and run the investigation worker in another terminal:
 
 ```powershell
@@ -61,7 +72,27 @@ npm.cmd run worker:dev
 
 The API and worker must load the same backend environment. Billing may remain disabled while research is tested.
 
+### Latest live result (23 October 2026)
+
+The real queued `example.com` investigation now completes using `gemini-3.5-flash-lite`. It collected six sources, retrieved two pages, and saved an analysis summary and two findings. The successful model run took 16.84 seconds, using 1,457 input tokens and 427 output tokens. Both saved evidence quotations match their linked source excerpts. The former model's failed run remains in the execution history. The API and worker are running with research enabled.
+
+To check generation again later, run this backend diagnostic. It makes one real request using public sample text and validates the resulting findings and exact evidence quotations:
+
+```powershell
+node --import tsx scripts/check-research-generation.ts
+```
+
+Expect `generation: passed` and `validation: passed`. Failure codes distinguish `provider_unavailable`, `provider_rate_limited`, `provider_timeout`, and `provider_connection_failed` without exposing credentials or raw provider responses. A passed diagnostic checks the model adapter; it does not exercise browser interactions. The successful worker test is labelled `Live integration check (example.com)` in the test account history, investigation `ea196d59-7b9a-4384-bcee-9a805b3bd17c`. Open it after signing into that account, then submit a fresh check through the frontend for browser acceptance.
+
+UltraSearch is the discovery stage for non-contract investigations: it searches public web results, while PadiCheck separately retrieves source pages and Gemini interprets their evidence. It does not generate the final findings or certify a business. Contract reviews skip web search and use the submitted document evidence instead.
+
+On 24 October 2026, deeper search was enabled: six focused queries, up to five results per query, up to 25 discovered sources, and a 180-second collection budget. Analysis prefers retrieved pages and multiple hosts, using up to 20 excerpts within a fixed total text budget. A live Mozilla test completed in 60.01 seconds with six successful queries, 25 sources, 21 retrieved pages and four findings; all five saved quotations matched their source excerpts. See [deep-search configuration and validation](deep-search.md). New checks use this configuration automatically; historical completed reports retain their existing evidence.
+
+A subsequent real UI company search exposed an evidence-validation failure: the model returned unsupported quotations and an uncited finding. The prompt now requires unsupported findings to be omitted and evidence gaps to be stated in limitations. The pipeline allows one validation-repair attempt and records each run; it still rejects fabricated source IDs, quotations, and unsupported findings. The reported check now completes with a saved summary and no supported findings. A completed check can honestly report insufficient evidence; it does not imply a business is verified or safe. Status-specific frontend messages replace the generic failure placeholder without changing the layout.
+
 ## 3. Bachs sandbox
+
+For the new phone intelligence, business registry and property-location integrations, use the separate [verification provider setup guide](verification-providers.md). These services default to disabled and need their own accounts; the Gemini/Google login credentials do not enable them.
 
 Create/sign into [Bachs](https://app.bachs.io/) and use its sandbox. In the developer section, create a sandbox API key. Create the actual one-time/recurring products you intend to sell. Obtain the merchant organization/account ID and create a webhook destination; keep its signing secret private. See the [official Bachs quickstart](https://docs.bachs.io/introduction) and the backend's `docs/payments.md` for supported event subscriptions and offer mapping.
 

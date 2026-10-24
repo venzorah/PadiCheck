@@ -9,6 +9,7 @@ import { CreditPill } from '../../components/consumer/CreditPill';
 import { PageHeader } from '../../components/consumer/PageHeader';
 import { useUser } from '../../contexts/UserContext';
 import { useCheckFlow } from '../../hooks/useCheckFlow';
+import { countryOptions } from '../../data/preferences';
 import { domainOf, looksLikeUrl } from '../../utils/checks';
 import type { InputMode } from '../../types/check';
 
@@ -129,14 +130,14 @@ export function CheckFlow() {
             {flow.mode === 'text' &&
             <div>
                 <label htmlFor="check-text" className="text-sm font-medium text-ink">
-                  Describe the opportunity
+                  {flow.context === 'phone' ? 'Phone number' : 'Describe the opportunity'}
                 </label>
                 <textarea
                 id="check-text"
                 value={flow.text}
                 onChange={(e) => flow.setText(e.target.value)}
                 rows={6}
-                placeholder="What is it, who’s offering it, the price or pay, and how you found it."
+                placeholder={flow.context === 'phone' ? '+2348012345678' : 'What is it, who’s offering it, the price or pay, and how you found it.'}
                 className="mt-2 block w-full resize-none rounded-2xl bg-surface p-4 text-[17px] leading-relaxed text-ink outline-none ring-1 ring-line placeholder:text-muted/70 focus:ring-2 focus:ring-ink" />
               
                 <p className="mt-2 text-sm text-muted">More detail gives a more useful report. Your draft stays on this page.</p>
@@ -157,6 +158,36 @@ export function CheckFlow() {
 
             }
 
+            {['business', 'property', 'job'].includes(flow.context) && <fieldset className="mt-5 space-y-3">
+              <legend className="mb-2 text-sm font-medium text-ink">Details for a more precise check (optional)</legend>
+              {(flow.context === 'business' || flow.context === 'job') && <label className="block text-sm font-medium text-ink">
+                {flow.context === 'job' ? 'Employer legal name' : 'Legal business name'}
+                <input value={flow.verification[flow.context === 'job' ? 'employer_name' : 'business_name'] || ''} maxLength={200}
+                  onChange={event => flow.setVerificationField(flow.context === 'job' ? 'employer_name' : 'business_name', event.target.value)}
+                  className="mt-2 block h-12 w-full rounded-2xl bg-surface px-4 text-[17px] outline-none ring-1 ring-line focus:ring-2 focus:ring-ink" />
+              </label>}
+              {(flow.context === 'business' || flow.context === 'job') && <label className="block text-sm font-medium text-ink">Registration number
+                <input value={flow.verification.registration_number || ''} maxLength={80} placeholder="For example, RC123456"
+                  onChange={event => flow.setVerificationField('registration_number', event.target.value)}
+                  className="mt-2 block h-12 w-full rounded-2xl bg-surface px-4 text-[17px] outline-none ring-1 ring-line focus:ring-2 focus:ring-ink" />
+              </label>}
+              {flow.context === 'property' && <label className="block text-sm font-medium text-ink">Property address
+                <input value={flow.verification.address || ''} maxLength={500} autoComplete="street-address"
+                  onChange={event => flow.setVerificationField('address', event.target.value)}
+                  className="mt-2 block h-12 w-full rounded-2xl bg-surface px-4 text-[17px] outline-none ring-1 ring-line focus:ring-2 focus:ring-ink" />
+              </label>}
+              {flow.context === 'job' && <label className="block text-sm font-medium text-ink">Employer's official website
+                <input value={flow.verification.official_website || ''} maxLength={2048} placeholder="https://" inputMode="url" autoCapitalize="none"
+                  onChange={event => flow.setVerificationField('official_website', event.target.value)}
+                  className="mt-2 block h-12 w-full rounded-2xl bg-surface px-4 text-[17px] outline-none ring-1 ring-line focus:ring-2 focus:ring-ink" />
+              </label>}
+              <label className="block text-sm font-medium text-ink">Country
+                <select value={flow.verification.country_code || 'NG'} onChange={event => flow.setVerificationField('country_code', event.target.value)}
+                  className="mt-2 block h-12 w-full rounded-2xl bg-surface px-4 text-[17px] outline-none ring-1 ring-line focus:ring-2 focus:ring-ink">
+                  {countryOptions.map(country => <option key={country.value} value={country.value}>{country.label}</option>)}
+                </select>
+              </label>
+            </fieldset>}
           </div>
 
           <div className="mt-8 lg:hidden">

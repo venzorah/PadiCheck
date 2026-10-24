@@ -5,11 +5,12 @@ import { useUser } from '../contexts/UserContext';
 import { getCheckType, makeId } from '../utils/checks';
 import { takeSharedFiles } from '../utils/shareInbox';
 import { buildInvestigation, type ResearchContext } from '../utils/investigations';
+import {useCreditCost} from './useCreditCost';
 import { investigationsApi } from '../api/investigations';
 import { mediaApi } from '../api/media';
 import { ApiError, apiErrorMessage } from '../api/client';
 import type { InputMode, UploadItem } from '../types/check';
-import type { MediaRecord } from '../types/investigation';
+import type { MediaRecord, VerificationInput } from '../types/investigation';
 
 export function useCheckFlow() {
   const { type } = useParams<{ type: string }>();
@@ -19,10 +20,14 @@ export function useCheckFlow() {
   const { hasPermission, credits } = useUser();
   const option = getCheckType(type);
   const context: ResearchContext = type && ['business', 'phone', 'website', 'person', 'social', 'listing'].includes(type) ? type as ResearchContext : option.id;
+  const creditKind = context === 'property' ? 'property' : context === 'business' ? 'company_research' : context === 'phone' ? 'phone_lookup' : context === 'job' ? 'job_search' : context === 'contract' ? 'contract_review' : 'general_research';
   const initial = params.get('mode');
   const [mode, setMode] = useState<InputMode>(context === 'phone' ? 'text' : option.id === 'contract' ? 'upload' : context === 'website' ? 'link' : initial === 'camera' || initial === 'upload' || initial === 'text' || initial === 'link' ? initial : option.id === 'link' || params.has('url') ? 'link' : 'text');
   const [url, setUrl] = useState(params.get('url') ?? '');
   const [text, setText] = useState(params.get('text') ?? '');
+  const pricing = useCreditCost(creditKind === 'general_research' && mode === 'link' ? 'web_analysis' : creditKind,credits);
+  const [verification, setVerification] = useState<VerificationInput>({ country_code: 'NG' });
+  const setVerificationField = (key: keyof VerificationInput, value: string) => setVerification(current => ({ ...current, [key]: value }));
   const [uploads, setUploads] = useState<UploadItem[]>(() => takeSharedFiles().map((file) => ({ id: makeId('f'), file, progress: 0, status: 'ready' })));
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -34,7 +39,7 @@ export function useCheckFlow() {
   const uploaded = useRef(new Map<File, MediaRecord>());
   useEffect(() => () => controller.current?.abort(), []);
   const allowed = hasPermission('investigations.create');
-  const ready = online && allowed && !busy && !uncertain && text.length <= 10000 && (mode === 'text' ? text.trim().length > 0 : mode === 'link' ? url.trim().length > 0 : mode === 'upload' ? uploads.length > 0 && uploads.length <= 10 && uploads.every((u) => u.status !== 'error' && u.file.size > 0 && u.file.size <= 10 * 1024 * 1024 && (u.file.type === 'application/pdf' || /\.pdf$/i.test(u.file.name))) : false);
+  const ready = !pricing.loading && !pricing.error && online && allowed && !busy && !uncertain && text.length <= 10000 && (mode === 'text' ? text.trim().length > 0 : mode === 'link' ? url.trim().length > 0 : mode === 'upload' ? uploads.length > 0 && uploads.length <= 10 && uploads.every((u) => u.status !== 'error' && u.file.size > 0 && u.file.size <= 10 * 1024 * 1024 && (u.file.type === 'application/pdf' || /\.pdf$/i.test(u.file.name))) : false);
   const summary = mode === 'link' ? url : mode === 'text' ? text.slice(0, 100) : `${uploads.length} PDF document(s)`;
   const confirm = async () => {
     if (inFlight.current || !ready) return;
@@ -60,7 +65,9 @@ export function useCheckFlow() {
           mediaIds.push(media.media_id);
         }
       }
-      const input = buildInvestigation({ type: context, mode: mode as 'link' | 'text' | 'upload', text, url, mediaIds });
+      const input = buildInvestigation({ type: context, mode: mode as 'link' | 'text' | 'upload', text, url, mediaIds,
+        ...(['business', 'property', 'job'].includes(context) ? { verification } : {}) });
+      if(pricing.enabled)input.expected_credit_cost=pricing.cost;
       setStage('Submitting investigation...');
       creating = true;
       const result = await investigationsApi.create(input, abort.signal);
@@ -70,10 +77,12 @@ export function useCheckFlow() {
       if (creating && (!(failure instanceof ApiError) || failure.status >= 500 || failure.code === 'invalid_response')) {
         setUncertain(true);
         setError('The submission could not be confirmed. Check History before starting another check; the server may have saved it.');
+      } else if(failure instanceof ApiError && failure.code === 'credit_price_changed'){
+        pricing.refresh();setError('The credit cost changed. Review the updated price and confirm again.');
       } else if (failure instanceof ApiError && failure.status === 402) {
-        setError('You have no investigation units available. Open Billing to choose an enabled offer, then start a new check deliberately.');
+        setError('You do not have enough credits for this check. Open Credits to view your balance and available packages.');
       } else setError(failure instanceof ApiError ? apiErrorMessage(failure) : failure instanceof Error ? failure.message : 'Could not submit this check.');
     } finally { inFlight.current = false; if (!abort.signal.aborted) setBusy(false); }
   };
-  return { credits, cost: Number.isFinite(credits) ? 1 : NaN, option, context, mode, setMode, url, setUrl, text, setText, uploads, setUploads, confirmOpen, setConfirmOpen, busy, stage, error, uncertain, allowed, ready, online, summary, confirm };
+  return { credits, cost: pricing.cost, option, context, mode, setMode, url, setUrl, text, setText, verification, setVerificationField, uploads, setUploads, confirmOpen, setConfirmOpen, busy, stage, error: error || (pricing.error ? apiErrorMessage(pricing.error) : ''), uncertain, allowed, ready, online, summary, confirm };
 }

@@ -2,7 +2,7 @@ import type { PublicBusiness, PublicBusinessDetail } from '../api/directory';
 import type { Business, TrustEntity, UserReport, Dispute, AppNotification } from '../types/trust';
 import type { AppNotice } from '../api/notifications';
 import type { AnalysisResult } from '../types/check';
-import type { Investigation } from '../types/investigation';
+import type { Investigation, SpecialistCheck } from '../types/investigation';
 
 // These adapters fill the original presentation models from server records only.
 // Unavailable metrics remain absent/NaN; they never become invented scores.
@@ -27,9 +27,35 @@ export function businessEntity(business: Business): TrustEntity {
     recommendation: 'Read the available evidence. Numerical scoring is unavailable.', businessSlug: business.slug };
 }
 export function investigationView(row: Investigation): AnalysisResult {
+  const failures: Record<string, string> = {
+    analysis_failed: 'An evidence-backed answer could not be produced. Retry this check or add a website or more identifying details.',
+    invalid_model_output: 'The analysis could not be validated against its sources. Retry this check or add a website or more identifying details.',
+    no_readable_evidence: 'No readable source evidence was found. Add a website, document, or more identifying details and try again.',
+    provider_timeout: 'The analysis service took too long to respond. Retry this check shortly.',
+    provider_unavailable: 'The analysis service is temporarily unavailable. Retry this check shortly.',
+    provider_rate_limited: 'The analysis service is busy. Wait a little, then retry this check.',
+    provider_connection_failed: 'The analysis service could not be reached. Retry this check shortly.',
+  };
+  const statusSummary: Record<Investigation['status'], string> = {
+    queued: 'Your check is queued. It will update when source collection starts.',
+    collecting_sources: 'We are finding and retrieving sources for this check.',
+    analyzing: 'We are analysing the available evidence.',
+    completed: 'Open this check to view the collected evidence.',
+    cancelled: 'This check was cancelled.',
+    failed: failures[row.error_code || ''] || 'This check could not be completed. Open it to retry or start a new check with more details.',
+  };
   return { id: row.investigation_id, type: row.investigation_type === 'contract_review' ? 'contract' : row.investigation_type === 'web_analysis' ? 'link' : 'shopping',
     categoryLabel: row.investigation_type.replace(/_/g, ' '), title: row.title || 'Investigation', source: row.status.replace(/_/g, ' '), createdAt: row.created_at,
-    verdict: 'caution', status: row.status.replace(/_/g, ' '), summary: row.result_summary || 'Open this check to view its current status and available evidence.', sections: [], looksGood: [], toCheck: [], creditsUsed: NaN, availableOffline: false };
+    verdict: 'caution', status: row.status.replace(/_/g, ' '), summary: row.result_summary || statusSummary[row.status], sections: [], looksGood: [], toCheck: [], creditsUsed: NaN, availableOffline: false };
+}
+export function specialistView(check: SpecialistCheck): AnalysisResult['sections'][number] {
+  const labels = { phone: 'Phone intelligence', business: 'Business registration', property: 'Property location', job: 'Employer confirmation' };
+  const statuses: Record<string, string> = { not_configured: 'Service not configured', needs_input: 'More information or confirmation needed', unavailable: 'Check unavailable',
+    record_found: 'Registry record returned', record_matched: 'Registration details matched', record_mismatch: 'Registration details differ', not_found: 'No result returned',
+    valid_number: 'Provider reports a valid number', invalid_number: 'Provider reports an invalid number', possible_matches: 'Possible matches need confirmation', location_found: 'Location found; title remains unverified' };
+  return { label: labels[check.kind], verdict: 'caution', headline: statuses[check.status] || 'Check result',
+    detail: [check.summary, ...(check.facts || []).map(fact => `${fact.label}: ${fact.value}`),
+      `${check.provider}${check.checked_at ? ' · ' + check.checked_at.slice(0, 10) : ''}`].join(' ') };
 }
 export function reportView(row: Record<string, unknown>): UserReport {
   const status = ({ submitted: 'pending', under_review: 'review', published: 'resolved', dismissed: 'rejected', rejected: 'rejected', withdrawn: 'withdrawn' } as const)[String(row.status)] || 'pending';
